@@ -1,29 +1,62 @@
 # tpc-org/prebid-server — fork notes
 
 This file documents fork-specific conventions and is intentionally not in
-upstream prebid/prebid-server.
+upstream prebid/prebid-server. **Do not include this file in any upstream PR.**
 
 ## Custom adapters
 
 Custom adapters built specifically for TPC live alongside upstream adapters in
-`adapters/<bidder>/`. They follow the same conventions as upstream adapters but
-are not intended for upstream contribution.
+`adapters/<bidder>/`, but follow a strict naming convention to mark them as
+fork-only.
 
-Naming convention for TPC-specific adapters: prefix with `tpc` (e.g. `tpcfoo`)
-to make divergence from upstream visually obvious in directory listings.
+**Naming:** TPC-only adapters are prefixed with `tpc` — e.g. `adapters/tpcfoo/`.
+The prefix makes divergence from upstream visually obvious in directory
+listings and greppable in scripts.
 
-## Stored requests and config
+**Do not include `adapters/tpc*` directories in any upstream PR.**
 
-Runtime config lives in tpc-org/pbs-settings, not in this repo. PBS reads
-stored requests from /usr/local/bin/stored_requests/data/by_id/stored_requests/
-inside the container, mounted from /var/www/pbs/config/stored_requests/ on
-each EC2 host. See pbs-settings README for the deploy flow.
+If a fix to an upstream adapter (e.g. `adapters/adform/`) is suitable for
+upstream contribution, follow the "Upstream PR workflow" below.
+
+## Upstream PR workflow
+
+When contributing a fix or improvement to prebid/prebid-server upstream:
+
+```bash
+# 1. Branch from upstream/master, NOT from fork master
+git fetch upstream
+git checkout -b upstream-pr/<short-description> upstream/master
+
+# 2. Cherry-pick or hand-apply ONLY the file(s) you want to contribute
+git checkout master -- <path/to/file>
+git add <path/to/file>
+git commit -m "Adapter: clear description per upstream conventions"
+
+# 3. Verify the branch contains nothing fork-only
+./scripts/check-upstream-pr-scope.sh
+
+# 4. Push and open PR from tpc-org/prebid-server@<branch> to prebid/prebid-server@master
+git push origin upstream-pr/<short-description>
+```
+
+**Never PR from fork master directly to upstream master.** That's how fork-only
+files leak into upstream PRs (which the script in step 3 will catch).
+
+## Stored requests and runtime config
+
+PBS runtime config lives in `tpc-org/pbs-settings`, not in this repo. PBS reads
+stored requests from `/usr/local/bin/stored_requests/data/by_id/stored_requests/`
+inside the container, mounted from `/var/www/pbs/config/pbs/stored_requests/`
+on each EC2 host. See `pbs-settings` README for the deploy flow.
+
+## Deploy
+
+This repo deploys via git push to bare repos on EC2 hosts (no GitHub Actions).
+The post-receive hook at `/home/git/pbs/hooks/post-receive` on each EC2 instance
+checks out the pushed branch into `/var/www/pbs/src/` and runs `deploy.sh` to
+rebuild and hot-swap the Docker container.
 
 ## Development reference
-
-(Content below is preserved from a previous fork-only CLAUDE.md.)
-
----
 
 ## Original CLAUDE.md content
 
