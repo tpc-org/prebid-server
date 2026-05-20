@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "TPC Adapter Params",
+  "description": "Params for the TPC routing stub adapter. Demand is resolved via PBS stored imps — no SSP endpoint is called.",
+  "type": "object",
+  "properties": {
+    "accountId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Publisher account ID on pbs.tpcsrv.com. Required by the Prebid.js tpcBidAdapter; reserved for future server-side account routing."
+    },
+    "placementId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stored imp ID. Maps to imp[].ext.prebid.storedrequest.id — PBS loads the stored imp which carries the real bidder config."
+    }
+  },
+  "required": ["accountId"]
+}
