@@ -1,0 +1,26 @@
+{
+  "description": "tpc adapter is a routing stub — no outbound HTTP requests are made. Demand resolved via PBS stored imps.",
+  "mockBidRequest": {
+    "id": "test-auction-id",
+    "imp": [
+      {
+        "id": "test-imp-id",
+        "banner": {
+          "format": [{ "w": 300, "h": 250 }]
+        },
+        "ext": {
+          "bidder": {
+            "accountId": "d0cd3243-716f-4f9c-b074-f72637de26f3",
+            "placementId": "sayhola-60b4e117"
+          }
+        }
+      }
+    ],
+    "site": {
+      "page": "https://www.sayhola.ai/",
+      "publisher": { "id": "d0cd3243-716f-4f9c-b074-f72637de26f3" }
+    }
+  },
+  "expectedMakeRequestsErrors": [],
+  "expectedBidResponses": []
+}

@@ -29,6 +29,23 @@ listings and greppable in scripts.
 If a fix to an upstream adapter (e.g. `adapters/adform/`) is suitable for
 upstream contribution, follow the "Upstream PR workflow" below.
 
+## Pulling Upstream workflow
+
+```bash
+# When pulling upstream updates into the fork:
+git fetch upstream
+git rebase upstream/master
+
+# If bidders.go or adapter_map.go conflict:
+# 1. Accept upstream changes (theirs) as the base
+# 2. Re-add the tpc entries in the correct alphabetical position
+# 3. git add openrtb_ext/bidders.go exchange/adapter_map.go
+# 4. git rebase --continue
+
+# The tpc entries are small and isolated — conflicts resolve in under a minute.
+# grep for "tpmn" to find the reinsertion point after each rebase.
+```
+
 ## Upstream PR workflow
 
 When contributing a fix or improvement to prebid/prebid-server upstream:
