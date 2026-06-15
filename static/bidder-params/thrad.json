@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Thrad Adapter Params",
+  "description": "A schema which validates params accepted by the Thrad adapter",
+  "type": "object",
+  "properties": {
+    "publisherId": {
+      "type": "string",
+      "description": "Publisher ID (accepted for compatibility, ignored — API keys come from server config)"
+    },
+    "requestType": {
+      "type": "string",
+      "enum": ["contextual", "opener"],
+      "description": "Bid request type: contextual (default) or opener"
+    },
+    "adFormats": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Accepted ad format types (e.g. sponsored_message)"
+    },
+    "userId": {
+      "type": "string",
+      "description": "Anonymous user identifier, injected per-auction from window.tpc.data"
+    },
+    "chatId": {
+      "type": "string",
+      "description": "Conversation session identifier"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role":      { "type": "string" },
+          "content":   { "type": "string" },
+          "timestamp": { "type": "string" }
+        },
+        "required": ["role", "content"]
+      },
+      "description": "Conversation history"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Optional conversation summary"
+    },
+    "turnNumber": {
+      "type": "integer",
+      "description": "Conversation turn index"
+    },
+    "config": {
+      "type": "object",
+      "description": "Optional publisher display configuration"
+    },
+    "userMetadata": {
+      "type": "object",
+      "description": "Optional user targeting and compliance metadata"
+    }
+  }
+}
