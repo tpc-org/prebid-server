@@ -1,0 +1,7 @@
+endpoint: "https://ssp.thrads.ai/api/v1/ssp/bid-request"
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - native

@@ -1,0 +1,111 @@
+{
+  "mockBidRequest": {
+    "id": "test-request-id",
+    "site": {
+      "page": "https://example.com/page"
+    },
+    "device": {
+      "ip": "1.2.3.4",
+      "ua": "Mozilla/5.0",
+      "geo": {
+        "country": "USA",
+        "region": "CA",
+        "city": "San Francisco"
+      },
+      "devicetype": 2
+    },
+    "imp": [
+      {
+        "id": "test-imp-id",
+        "native": {
+          "request": "{\"ver\":\"1.1\",\"layout\":1,\"adunit\":2,\"assets\":[{\"id\":1,\"required\":1,\"title\":{\"len\":80}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":200}},{\"id\":5,\"required\":0,\"data\":{\"type\":12}},{\"id\":6,\"required\":0,\"data\":{\"type\":1}}]}",
+          "ver": "1.1"
+        },
+        "ext": {
+          "bidder": {
+            "userId": "user-123",
+            "chatId": "chat-456",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello world",
+                "timestamp": "2024-01-01T00:00:00Z"
+              }
+            ],
+            "requestType": "contextual",
+            "adFormats": ["sponsored_message"]
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+        "body": {
+          "userId": "user-123",
+          "chatId": "chat-456",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello world",
+              "timestamp": "2024-01-01T00:00:00Z"
+            }
+          ],
+          "request_type": "contextual",
+          "ad_formats": ["sponsored_message"]
+        },
+        "impIDs": ["test-imp-id"]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "requestId": "req-abc",
+          "timestamp": "2024-01-01T00:00:00Z",
+          "totalTime": 0.5,
+          "status": "success",
+          "message": "",
+          "data": {
+            "bid": {
+              "ad_format": "sponsored_message",
+              "price": 1.23,
+              "advertiser": "Test Advertiser",
+              "domain": "example.com",
+              "headline": "Test Headline",
+              "description": "Test Description",
+              "cta_text": "Learn More",
+              "url": "https://example.com/click",
+              "placement": "text",
+              "logo_url": "",
+              "image_url": "",
+              "view_url": "https://example.com/view",
+              "dsp": "test-dsp",
+              "bidId": "test-bid-1"
+            }
+          },
+          "error": null
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": [
+        {
+          "bid": {
+            "id": "test-bid-1",
+            "impid": "test-imp-id",
+            "price": 1.23,
+            "adm": "{\"ver\":\"1.1\",\"link\":{\"url\":\"https://example.com/click\"},\"assets\":[{\"id\":1,\"title\":{\"text\":\"Test Headline\"}},{\"id\":2,\"data\":{\"value\":\"Test Description\"}},{\"id\":5,\"data\":{\"value\":\"Learn More\"}},{\"id\":6,\"data\":{\"value\":\"Test Advertiser\"}}],\"imptrackers\":[\"https://example.com/view\"]}",
+            "burl": "https://example.com/view",
+            "adomain": ["example.com"],
+            "crid": "test-bid-1"
+          },
+          "type": "native"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "mockBidRequest": {
+    "id": "test-request-id",
+    "site": {
+      "page": "https://example.com/page"
+    },
+    "imp": [
+      {
+        "id": "test-imp-id",
+        "native": {
+          "request": "{\"ver\":\"1.1\",\"layout\":1,\"adunit\":2,\"assets\":[{\"id\":1,\"required\":1,\"title\":{\"len\":80}}]}",
+          "ver": "1.1"
+        },
+        "ext": {
+          "bidder": {
+            "userId": "user-123",
+            "requestType": "contextual",
+            "adFormats": ["sponsored_message"]
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+        "body": {
+          "userId": "user-123",
+          "request_type": "contextual",
+          "ad_formats": ["sponsored_message"]
+        },
+        "impIDs": ["test-imp-id"]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "requestId": "req-abc",
+          "timestamp": "2024-01-01T00:00:00Z",
+          "totalTime": 0.3,
+          "status": "success",
+          "message": "",
+          "data": {
+            "bid": null
+          },
+          "error": null
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": []
+}
