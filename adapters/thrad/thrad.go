@@ -1,6 +1,6 @@
-package thrads
+package thrad
 
-// Package thrads implements a Prebid Server adapter for Thrad (thrads.ai).
+// Package thrad implements a Prebid Server adapter for Thrad (thrads.ai).
 //
 // ── Key selection (staging vs production) ────────────────────────────────────
 //

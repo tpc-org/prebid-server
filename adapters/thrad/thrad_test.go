@@ -1,4 +1,4 @@
-package thrads
+package thrad
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestJsonSamples(t *testing.T) {
-	bidder, buildErr := Builder(openrtb_ext.BidderThrads, config.Adapter{
+	bidder, buildErr := Builder(openrtb_ext.BidderThrad, config.Adapter{
 		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
 		ExtraAdapterInfo: `{"productionKey":"pk_test_production","stagingKey":"pk_test_staging"}`,
 	}, config.Server{})
@@ -18,5 +18,5 @@ func TestJsonSamples(t *testing.T) {
 		t.Fatalf("Builder returned unexpected error %v", buildErr)
 	}
 
-	adapterstest.RunJSONBidderTest(t, "thradstest", bidder)
+	adapterstest.RunJSONBidderTest(t, "thradtest", bidder)
 }
