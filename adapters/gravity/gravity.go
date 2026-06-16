@@ -279,6 +279,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 		AdM:     nativeAdm,
 		BURL:    ad.ImpURL,
 		ADomain: adomain,
+		CrID:    ad.PlacementID,
 	}
 
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(1)
