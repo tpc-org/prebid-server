@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Gravity Adapter Params",
+  "description": "A schema which validates params accepted by the Gravity adapter",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string",
+      "description": "Stable per-user identifier for frequency capping and attribution"
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Session identifier for frequency capping and experiment bucketing"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role":    { "type": "string" },
+          "content": { "type": "string" }
+        },
+        "required": ["role", "content"]
+      },
+      "description": "Recent conversation history for contextual ad matching"
+    },
+    "placement": {
+      "type": "string",
+      "enum": [
+        "below_response", "above_response", "inline_response",
+        "left_response", "right_response", "search_result",
+        "top_page", "bottom_page", "left_page", "right_page", "center_page"
+      ],
+      "description": "Placement type (e.g. below_response)"
+    },
+    "placementId": {
+      "type": "string",
+      "description": "Unique slot name within the publisher's UI (e.g. chat-main)"
+    },
+    "excludedTopics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Topics to exclude from ad matching (e.g. [\"politics\"])"
+    },
+    "relevancy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Minimum relevancy score 0.0–1.0 (default 0.2)"
+    },
+    "hashedEmail": {
+      "type": "string",
+      "description": "SHA-256 hashed email (sha256(email.strip().lower()))"
+    },
+    "hashedPhone": {
+      "type": "string",
+      "description": "SHA-256 hashed phone number (digits only before hashing)"
+    }
+  },
+  "required": ["userId", "sessionId", "placement", "placementId"]
+}

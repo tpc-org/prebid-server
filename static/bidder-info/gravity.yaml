@@ -1,0 +1,7 @@
+endpoint: "https://server.trygravity.ai/api/v1/ad"
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - native
