@@ -166,6 +166,12 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 			continue
 		}
 
+		if len(gravExt.Messages) == 0 {
+			// Gravity API requires messages (conversation context). Skip rather than
+			// send a request that will always return 400.
+			continue
+		}
+
 		gravReq := gravityRequest{
 			Messages:  gravExt.Messages,
 			SessionID: gravExt.SessionID,
