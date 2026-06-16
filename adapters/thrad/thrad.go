@@ -347,14 +347,13 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 
 // buildNativeAdm constructs an OpenRTB native adm string from a Thrad bid.
 //
-// Asset IDs match the Stored Imp native.request assets exactly:
+// Asset IDs match the Stored Imp native.request assets (sayhola-9243e9b6.json):
 //
-//	1 = title     (headline)
-//	2 = data/desc (description)
-//	3 = img/main  (image_url — image placement only)
-//	4 = img/logo  (logo_url)
-//	5 = data/cta  (cta_text)
-//	6 = data/sponsored (advertiser)
+//	1 = title        (required)
+//	2 = img          (main image if available, logo as fallback; optional)
+//	3 = data/desc    (description)
+//	4 = data/sponsor (advertiser name)
+//	5 = data/cta     (cta_text — extra, not in stored imp, harmless)
 func buildNativeAdm(bid *ThradBid) (string, error) {
 	type nativeTitle struct {
 		Text string `json:"text"`
@@ -386,14 +385,19 @@ func buildNativeAdm(bid *ThradBid) (string, error) {
 		{ID: 1, Title: &nativeTitle{Text: bid.Headline}},
 	}
 
-	if bid.Description != "" {
-		assets = append(assets, nativeAsset{ID: 2, Data: &nativeData{Value: bid.Description}})
-	}
+	// id 2 = img slot: prefer main image (type 3), fall back to logo (type 2)
 	if bid.ImageURL != "" {
-		assets = append(assets, nativeAsset{ID: 3, Img: &nativeImg{URL: bid.ImageURL, Type: 1}})
+		assets = append(assets, nativeAsset{ID: 2, Img: &nativeImg{URL: bid.ImageURL, Type: 3}})
+	} else if bid.LogoURL != "" {
+		assets = append(assets, nativeAsset{ID: 2, Img: &nativeImg{URL: bid.LogoURL, Type: 2}})
 	}
-	if bid.LogoURL != "" {
-		assets = append(assets, nativeAsset{ID: 4, Img: &nativeImg{URL: bid.LogoURL, Type: 2}})
+
+	if bid.Description != "" {
+		assets = append(assets, nativeAsset{ID: 3, Data: &nativeData{Value: bid.Description}})
+	}
+
+	if bid.Advertiser != "" {
+		assets = append(assets, nativeAsset{ID: 4, Data: &nativeData{Value: bid.Advertiser}})
 	}
 
 	ctaText := bid.CTAText
@@ -401,10 +405,6 @@ func buildNativeAdm(bid *ThradBid) (string, error) {
 		ctaText = "Learn More"
 	}
 	assets = append(assets, nativeAsset{ID: 5, Data: &nativeData{Value: ctaText}})
-
-	if bid.Advertiser != "" {
-		assets = append(assets, nativeAsset{ID: 6, Data: &nativeData{Value: bid.Advertiser}})
-	}
 
 	adm := nativeAdmWrapper{
 		Ver:    "1.1",
