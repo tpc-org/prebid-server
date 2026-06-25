@@ -264,6 +264,17 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 	ad := &ads[0]
 	imp := request.Imp[0]
 
+	bidPrice := a.info.BidPrice
+	var bidderExt adapters.ExtImpBidder
+	var gravExt openrtb_ext.ExtImpGravity
+	if err := json.Unmarshal(imp.Ext, &bidderExt); err == nil {
+		if err := json.Unmarshal(bidderExt.Bidder, &gravExt); err == nil {
+			if gravExt.BidPrice > 0 {
+				bidPrice = gravExt.BidPrice
+			}
+		}
+	}
+
 	nativeAdm, err := buildNativeAdm(ad)
 	if err != nil {
 		return nil, []error{&errortypes.BadServerResponse{
@@ -281,7 +292,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 	ortbBid := openrtb2.Bid{
 		ID:      imp.ID,
 		ImpID:   imp.ID,
-		Price:   a.info.BidPrice,
+		Price:   bidPrice,
 		AdM:     nativeAdm,
 		BURL:    ad.ImpURL,
 		ADomain: adomain,

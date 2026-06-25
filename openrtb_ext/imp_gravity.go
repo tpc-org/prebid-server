@@ -18,6 +18,7 @@ type ExtImpGravity struct {
 	// Optional targeting.
 	ExcludedTopics []string `json:"excludedTopics,omitempty"`
 	Relevancy      *float64 `json:"relevancy,omitempty"`
+	BidPrice       float64  `json:"bidPrice,omitempty"` // overrides global extra_info.bidPrice when set
 
 	// Optional user identity signals.
 	HashedEmail string `json:"hashedEmail,omitempty"`
