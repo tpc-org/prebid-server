@@ -18,8 +18,8 @@
       {
         "id": "test-imp-id",
         "native": {
-          "request": "{\"ver\":\"1.1\",\"layout\":1,\"adunit\":2,\"assets\":[{\"id\":1,\"required\":1,\"title\":{\"len\":80}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":200}},{\"id\":5,\"required\":0,\"data\":{\"type\":12}},{\"id\":6,\"required\":0,\"data\":{\"type\":1}}]}",
-          "ver": "1.1"
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":300,\"hmin\":200}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
         },
         "ext": {
           "bidder": {
@@ -75,11 +75,10 @@
               "headline": "Test Headline",
               "description": "Test Description",
               "cta_text": "Learn More",
-              "url": "https://example.com/click",
+              "url": "https://ssp.thrads.ai/api/v1/tracking/click?view_url=https://ssp.thrads.ai/api/v1/tracking/view?token=abc123",
               "placement": "text",
               "logo_url": "",
-              "image_url": "",
-              "view_url": "https://example.com/view",
+              "image_url": "https://ssp.thrads.ai/media/product.jpg",
               "dsp": "test-dsp",
               "bidId": "test-bid-1"
             }
@@ -98,8 +97,8 @@
             "id": "test-bid-1",
             "impid": "test-imp-id",
             "price": 1.23,
-            "adm": "{\"ver\":\"1.1\",\"link\":{\"url\":\"https://example.com/click\"},\"assets\":[{\"id\":1,\"title\":{\"text\":\"Test Headline\"}},{\"id\":2,\"data\":{\"value\":\"Test Description\"}},{\"id\":5,\"data\":{\"value\":\"Learn More\"}},{\"id\":6,\"data\":{\"value\":\"Test Advertiser\"}}],\"imptrackers\":[\"https://example.com/view\"]}",
-            "burl": "https://example.com/view",
+            "adm": "{\"ver\":\"1.1\",\"link\":{\"url\":\"https://ssp.thrads.ai/api/v1/tracking/click?view_url=https://ssp.thrads.ai/api/v1/tracking/view?token=abc123\"},\"assets\":[{\"id\":0,\"title\":{\"text\":\"Test Headline\"}},{\"id\":1,\"img\":{\"url\":\"https://ssp.thrads.ai/media/product.jpg\",\"type\":3}},{\"id\":2,\"data\":{\"value\":\"Test Description\"}},{\"id\":3,\"data\":{\"value\":\"Test Advertiser\"}},{\"id\":4,\"data\":{\"value\":\"Learn More\"}}],\"imptrackers\":[\"https://ssp.thrads.ai/api/v1/tracking/view?token=abc123\"]}",
+            "burl": "https://ssp.thrads.ai/api/v1/tracking/view?token=abc123",
             "adomain": ["example.com"],
             "crid": "test-bid-1"
           },

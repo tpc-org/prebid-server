@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"text/template"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
@@ -91,13 +92,38 @@ type ThradBid struct {
 	Headline    string  `json:"headline"`
 	Description string  `json:"description"`
 	CTAText     string  `json:"cta_text"`
-	URL         string  `json:"url"`      // click tracking URL
+	// URL is both the destination (redirect-through) and the click tracker —
+	// Thrad does not send a separate click-tracking beacon.
+	URL         string  `json:"url"`
 	Placement   string  `json:"placement"` // "text" or "image"
 	LogoURL     string  `json:"logo_url"`
 	ImageURL    string  `json:"image_url"`
-	ViewURL     string  `json:"view_url"` // impression pixel (viewability billing)
+	// ViewURL is not currently sent by Thrad as a top-level field despite the
+	// field name in their docs — impression-tracking pixels instead arrive as
+	// view_url/thrad_view_url query params on URL. Kept as a fallback in case
+	// Thrad starts sending it directly. See viewTrackerURLs.
+	ViewURL     string  `json:"view_url"`
 	DSP         string  `json:"dsp"`
 	BidID       string  `json:"bidId"`
+}
+
+// viewTrackerURLs extracts Thrad's impression-tracking pixel URLs. Thrad
+// embeds these as query params (view_url, thrad_view_url — DSP-side and
+// SSP-side accounting respectively) on the click/destination URL rather than
+// as top-level response fields.
+func viewTrackerURLs(rawURL string) []string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil
+	}
+	q := u.Query()
+	var trackers []string
+	for _, param := range []string{"view_url", "thrad_view_url"} {
+		if v := q.Get(param); v != "" {
+			trackers = append(trackers, v)
+		}
+	}
+	return trackers
 }
 
 // ── Adapter ───────────────────────────────────────────────────────────────────
@@ -325,12 +351,19 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 		adomain = []string{bid.Domain}
 	}
 
+	var burl string
+	if trackers := viewTrackerURLs(bid.URL); len(trackers) > 0 {
+		burl = trackers[0]
+	} else {
+		burl = bid.ViewURL
+	}
+
 	ortbBid := openrtb2.Bid{
 		ID:      bidID,
 		ImpID:   imp.ID,
 		Price:   bid.Price,
 		AdM:     nativeAdm,
-		BURL:    bid.ViewURL, // PBS fires as billing notice after win
+		BURL:    burl, // note: not currently fired by this PBS fork — see buildNativeAdm's imptrackers for the mechanism that actually fires
 		ADomain: adomain,
 		CrID:    bid.BidID,
 	}
@@ -356,7 +389,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 //	1 = img          (main image if available, logo as fallback; optional)
 //	2 = data/desc    (description/body)
 //	3 = data/sponsor (advertiser/sponsoredBy)
-//	4 = data/cta     (extra, not in Prebid.js request; harmless)
+//	4 = data/cta     (cta text)
 func buildNativeAdm(bid *ThradBid) (string, error) {
 	type nativeTitle struct {
 		Text string `json:"text"`
@@ -414,7 +447,9 @@ func buildNativeAdm(bid *ThradBid) (string, error) {
 		Link:   nativeLink{URL: bid.URL},
 		Assets: assets,
 	}
-	if bid.ViewURL != "" {
+	if trackers := viewTrackerURLs(bid.URL); len(trackers) > 0 {
+		adm.ImpTrackers = trackers
+	} else if bid.ViewURL != "" {
 		adm.ImpTrackers = []string{bid.ViewURL}
 	}
 
