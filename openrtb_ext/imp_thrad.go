@@ -6,7 +6,11 @@ package openrtb_ext
 // Dynamic fields (UserID, ChatID, Messages, etc.) are injected per-auction
 // by tpcBidAdapter from window.tpc.data and merged by PBS at request time.
 type ExtImpThrads struct {
-	// PublisherID is accepted for compatibility but ignored — API keys come from pbs.yaml extra_info.
+	// PublisherID selects which Thrad Publisher's API key pair to use, from
+	// pbs.yaml adapters.thrad.extra_info's "publishers" map (see thrad.go's
+	// package doc). Set this to our own Publisher.slug (sayhola, drawify,
+	// learnrithm, artsmart, slashspace). When empty, or when no entry exists
+	// for it, the adapter falls back to extra_info's top-level default key pair.
 	PublisherID string `json:"publisherId,omitempty"`
 
 	// RequestType is "contextual" (default) or "opener".

@@ -3,10 +3,11 @@
   "title": "Thrad Adapter Params",
   "description": "A schema which validates params accepted by the Thrad adapter",
   "type": "object",
+  "required": ["publisherId"],
   "properties": {
     "publisherId": {
       "type": "string",
-      "description": "Publisher ID (accepted for compatibility, ignored — API keys come from server config)"
+      "description": "Selects which Thrad Publisher's API key pair to use (pbs.yaml adapters.thrad.extra_info's publishers map). Set to our own Publisher.slug, e.g. sayhola, drawify, learnrithm, artsmart, slashspace."
     },
     "requestType": {
       "type": "string",
