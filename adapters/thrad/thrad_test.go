@@ -64,6 +64,39 @@ func TestSelectKeyPerPublisher(t *testing.T) {
 	}
 }
 
+// TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction locks in the
+// 2026-07-25 fix: real (non-test) traffic for a publisher with only a
+// staging key configured (learnrithm/drawify/slashspace's actual state at
+// the time — their staging keys were confirmed returning 500s from Thrad,
+// while sayhola's default production key works fine) must fall back to the
+// shared default productionKey, not that publisher's own (unverified/broken)
+// stagingKey. test=1 debugging still exercises that publisher's own staging
+// key, unchanged.
+func TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction(t *testing.T) {
+	extra := `{
+		"productionKey": "pk_default_prod",
+		"stagingKey":    "pk_default_staging",
+		"publishers": {
+			"learnrithm": {"stagingKey": "pk_learnrithm_staging"}
+		}
+	}`
+	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
+		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+		ExtraAdapterInfo: extra,
+	}, config.Server{})
+	if err != nil {
+		t.Fatalf("Builder returned unexpected error %v", err)
+	}
+	a := bidder.(*adapter)
+
+	if got := a.selectKey(&openrtb2.BidRequest{Test: 0}, "learnrithm"); got != "pk_default_prod" {
+		t.Errorf("real traffic for staging-only publisher = %q, want %q (default production key)", got, "pk_default_prod")
+	}
+	if got := a.selectKey(&openrtb2.BidRequest{Test: 1}, "learnrithm"); got != "pk_learnrithm_staging" {
+		t.Errorf("test=1 for staging-only publisher = %q, want %q (that publisher's own staging key, for debugging)", got, "pk_learnrithm_staging")
+	}
+}
+
 // TestBuilderAcceptsLegacyFlatExtraInfo confirms the exact flat shape already
 // live in production pbs.yaml today ({"productionKey":...,"stagingKey":...},
 // no "publishers" map) still builds and behaves identically to before this

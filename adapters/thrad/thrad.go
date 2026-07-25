@@ -23,9 +23,13 @@ package thrad
 // Imp) selects which entry in the "publishers" map applies; when absent, or
 // when the map has no entry for it, the top-level default is used instead.
 //
-// Within whichever key pair is selected, the adapter still picks stagingKey
-// vs productionKey based on BidRequest.Test = 1 (set automatically by
-// Prebid.js when ?pbjs_debug=true) exactly as before.
+// Within whichever key pair is selected, the adapter picks stagingKey vs
+// productionKey based on BidRequest.Test = 1 (set automatically by Prebid.js
+// when ?pbjs_debug=true). For real (non-test) traffic, if that publisher has
+// no productionKey configured yet, the adapter falls back to the shared
+// default productionKey rather than that publisher's own stagingKey — a
+// publisher's staging key/environment is for explicit test=1 debugging only,
+// not a safe implicit substitute for live traffic (see selectKey).
 //
 // ── Conversational context ───────────────────────────────────────────────────
 //
@@ -176,8 +180,15 @@ func Builder(bidderName openrtb_ext.BidderName, cfg config.Adapter, server confi
 // comes from the imp's ExtImpThrads.PublisherID (empty for imps not yet
 // migrated to the per-publisher scheme). Falls back to the default/embedded
 // key pair when publisherID is empty or has no entry in a.keys.Publishers.
-// Within whichever pair is selected, uses stagingKey when test=1 or when no
-// productionKey is configured yet.
+//
+// Within whichever pair is selected, uses stagingKey when test=1 (explicit
+// debugging of that publisher's own setup) — but for real traffic with no
+// productionKey configured yet for that publisher, falls back to the shared
+// default productionKey rather than that publisher's own stagingKey. Staging
+// keys are for test=1 debugging only, not an implicit stand-in for live
+// traffic — a publisher's staging key/environment isn't guaranteed to behave
+// the same as production (confirmed 2026-07-25: real traffic through
+// learnrithm's staging-only key was returning a 500 from Thrad).
 func (a *adapter) selectKey(request *openrtb2.BidRequest, publisherID string) string {
 	keys := a.keys.publisherKeys
 	if publisherID != "" {
@@ -190,6 +201,9 @@ func (a *adapter) selectKey(request *openrtb2.BidRequest, publisherID string) st
 	}
 	if keys.ProductionKey != "" {
 		return keys.ProductionKey
+	}
+	if a.keys.publisherKeys.ProductionKey != "" {
+		return a.keys.publisherKeys.ProductionKey
 	}
 	return keys.StagingKey
 }
