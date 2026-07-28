@@ -5,3 +5,6 @@ capabilities:
   site:
     mediaTypes:
       - native
+  app:
+    mediaTypes:
+      - native
