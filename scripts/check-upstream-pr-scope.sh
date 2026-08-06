@@ -10,7 +10,7 @@ git fetch upstream 2>/dev/null || {
 }
 
 DIFF=$(git diff upstream/master --name-only)
-PROBLEMS=$(echo "$DIFF" | grep -E '^(FORK_NOTES\.md|\.gitattributes|scripts/check-upstream-pr-scope\.sh|adapters/tpc)' || true)
+PROBLEMS=$(echo "$DIFF" | grep -E '^(FORK_NOTES\.md|\.gitattributes|scripts/check-upstream-pr-scope\.sh|adapters/tpc|modules/tpc)' || true)
 
 if [ -n "$PROBLEMS" ]; then
   echo "ERROR: branch contains fork-only files that should not go upstream:"

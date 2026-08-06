@@ -11,8 +11,8 @@ Three files:
 - `.gitattributes` — marks fork-only files as `export-ignore`
 - `scripts/check-upstream-pr-scope.sh` — pre-flight check for upstream PR branches
 
-No custom code yet. Future TPC-specific adapters will live under
-`adapters/tpc*` per the convention below.
+TPC-specific adapters live under `adapters/tpc*`, and TPC-specific hook
+modules live under `modules/tpc/*`, per the conventions below.
 
 ## Custom adapters
 
@@ -20,14 +20,35 @@ Custom adapters built specifically for TPC live alongside upstream adapters in
 `adapters/<bidder>/`, but follow a strict naming convention to mark them as
 fork-only.
 
-**Naming:** TPC-only adapters are prefixed with `tpc` — e.g. `adapters/tpcfoo/`.
-The prefix makes divergence from upstream visually obvious in directory
+**Naming:** TPC-only adapters are prefixed with `tpc` — e.g. `adapters/tpc/`
+(the tpc-adapter-parity stub bidder, used to give the Mobile SDK path
+equivalent behavior to what `tpcBidAdapter.js` does client-side on desktop
+— see `docs/architecture/aws-resources.md`'s Prebid Cache section and
+`docs/integration/mobile-sdk-integration.md` in `tpc-org/docs`). The
+prefix makes divergence from upstream visually obvious in directory
 listings and greppable in scripts.
 
 **Do not include `adapters/tpc*` directories in any upstream PR.**
 
 If a fix to an upstream adapter (e.g. `adapters/adform/`) is suitable for
 upstream contribution, follow the "Upstream PR workflow" below.
+
+## Custom hook modules
+
+Same convention, one level down: TPC-only PBS hook modules live under
+`modules/tpc/<module-name>/`, registered under vendor `"tpc"` in
+`modules/builder.go`'s `builders()` map — e.g. `modules/tpc/profanityfilter/`
+(rejects an auction before any bidder is called if the AI-chat conversation
+text contains a banned word; see `docs/architecture/profanity-filter.md`
+in `tpc-org/docs`).
+
+**Do not include `modules/tpc/*` directories in any upstream PR.** The
+one-line registration entry added to `modules/builder.go` for each such
+module is also fork-only in intent, even though `builder.go` itself is an
+upstream file — `scripts/check-upstream-pr-scope.sh` flags the whole
+`modules/tpc` path, but can't detect a partial in-file diff inside
+`builder.go` itself, so double-check that file's diff by eye before
+including it in any upstream branch.
 
 ## Upstream PR workflow
 
