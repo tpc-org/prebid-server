@@ -35,5 +35,5 @@ func TestMakeBidsReturnsNil(t *testing.T) {
 
 // TestJSONBidderTest runs the golden-file test suite from tpctest/.
 func TestJSONBidderTest(t *testing.T) {
-	adapterstest.RunJSONBidderTest(t, "tpc", new(adapter))
+	adapterstest.RunJSONBidderTest(t, "tpctest", new(adapter))
 }
