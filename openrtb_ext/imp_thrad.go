@@ -20,11 +20,11 @@ type ExtImpThrads struct {
 	AdFormats []string `json:"adFormats,omitempty"`
 
 	// Dynamic fields — injected per-auction from window.tpc.data via tpcBidAdapter.
-	UserID     string              `json:"userId"`
-	ChatID     string              `json:"chatId,omitempty"`
-	Messages   []ExtImpThradsMsg   `json:"messages,omitempty"`
-	Summary    string              `json:"summary,omitempty"`
-	TurnNumber *int                `json:"turnNumber,omitempty"`
+	UserID     string            `json:"userId"`
+	ChatID     string            `json:"chatId,omitempty"`
+	Messages   []ExtImpThradsMsg `json:"messages,omitempty"`
+	Summary    string            `json:"summary,omitempty"`
+	TurnNumber *int              `json:"turnNumber,omitempty"`
 
 	// Optional publisher-side config and user metadata.
 	Config   *ExtImpThradsConfig   `json:"config,omitempty"`
@@ -33,7 +33,7 @@ type ExtImpThrads struct {
 
 // ExtImpThradsMsg is one turn of conversation history.
 type ExtImpThradsMsg struct {
-	Role      string `json:"role"`      // "user" or "assistant"
+	Role      string `json:"role"` // "user" or "assistant"
 	Content   string `json:"content"`
 	Timestamp string `json:"timestamp"` // ISO 8601
 }

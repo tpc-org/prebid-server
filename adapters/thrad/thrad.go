@@ -77,16 +77,16 @@ type extraInfo struct {
 
 // ThradBidRequest is the payload sent to POST /api/v1/ssp/bid-request.
 type ThradBidRequest struct {
-	UserID       string                        `json:"userId"`
-	ChatID       string                        `json:"chatId,omitempty"`
-	Messages     []openrtb_ext.ExtImpThradsMsg `json:"messages,omitempty"`
-	Summary      string                        `json:"summary,omitempty"`
-	TurnNumber   *int                          `json:"turn_number,omitempty"`
-	Config       *openrtb_ext.ExtImpThradsConfig `json:"config,omitempty"`
+	UserID       string                            `json:"userId"`
+	ChatID       string                            `json:"chatId,omitempty"`
+	Messages     []openrtb_ext.ExtImpThradsMsg     `json:"messages,omitempty"`
+	Summary      string                            `json:"summary,omitempty"`
+	TurnNumber   *int                              `json:"turn_number,omitempty"`
+	Config       *openrtb_ext.ExtImpThradsConfig   `json:"config,omitempty"`
 	UserMetadata *openrtb_ext.ExtImpThradsUserMeta `json:"user_metadata,omitempty"`
-	RequestType  string                        `json:"request_type,omitempty"`
-	AdFormats    []string                      `json:"ad_formats,omitempty"`
-	Force        bool                          `json:"force,omitempty"`
+	RequestType  string                            `json:"request_type,omitempty"`
+	AdFormats    []string                          `json:"ad_formats,omitempty"`
+	Force        bool                              `json:"force,omitempty"`
 }
 
 // ThradBidResponse is the top-level Thrad API response envelope.
@@ -116,17 +116,17 @@ type ThradBid struct {
 	CTAText     string  `json:"cta_text"`
 	// URL is both the destination (redirect-through) and the click tracker —
 	// Thrad does not send a separate click-tracking beacon.
-	URL         string  `json:"url"`
-	Placement   string  `json:"placement"` // "text" or "image"
-	LogoURL     string  `json:"logo_url"`
-	ImageURL    string  `json:"image_url"`
+	URL       string `json:"url"`
+	Placement string `json:"placement"` // "text" or "image"
+	LogoURL   string `json:"logo_url"`
+	ImageURL  string `json:"image_url"`
 	// ViewURL is not currently sent by Thrad as a top-level field despite the
 	// field name in their docs — impression-tracking pixels instead arrive as
 	// view_url/thrad_view_url query params on URL. Kept as a fallback in case
 	// Thrad starts sending it directly. See viewTrackerURLs.
-	ViewURL     string  `json:"view_url"`
-	DSP         string  `json:"dsp"`
-	BidID       string  `json:"bidId"`
+	ViewURL string `json:"view_url"`
+	DSP     string `json:"dsp"`
+	BidID   string `json:"bidId"`
 }
 
 // viewTrackerURLs extracts Thrad's impression-tracking pixel URLs. Thrad

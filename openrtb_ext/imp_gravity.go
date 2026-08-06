@@ -7,8 +7,8 @@ package openrtb_ext
 // by tpcBidAdapter from window.tpc.data and merged by PBS at request time.
 type ExtImpGravity struct {
 	// Dynamic fields — injected per-auction from window.tpc.data.
-	UserID    string            `json:"userId"`
-	SessionID string            `json:"sessionId"`
+	UserID    string             `json:"userId"`
+	SessionID string             `json:"sessionId"`
 	Messages  []ExtImpGravityMsg `json:"messages,omitempty"`
 
 	// Static fields — configured in the PBS Stored Imp.
@@ -27,6 +27,6 @@ type ExtImpGravity struct {
 
 // ExtImpGravityMsg is one turn of conversation history.
 type ExtImpGravityMsg struct {
-	Role    string `json:"role"`    // "user" or "assistant"
+	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
 }
