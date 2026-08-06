@@ -3,6 +3,7 @@ package profanityfilter
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 
 	"github.com/prebid/prebid-server/v4/util/jsonutil"
@@ -11,11 +12,15 @@ import (
 // config is the module's startup config, read once from pbs.yaml's
 // hooks.modules.tpc.profanityfilter block (see pbs-settings/pbs.yaml) — the
 // same free-form-JSON convention already used for adapters.thrad.extra_info.
-// This is deliberately global/static, not per-account: see the plan notes on
-// why a single platform-wide list is what's being built.
+// The word list itself is NOT inline here — WordsFile points at a separate
+// JSON file, the same "pbs.yaml holds a pointer, content lives in
+// pbs-settings' filesystem" pattern PBS's own stored_requests/stored_imps
+// use, so growing the list is a pbs-settings-only file edit, no pbs.yaml
+// diff. This is deliberately global/static, not per-account: see the plan
+// notes on why a single platform-wide list is what's being built.
 type config struct {
-	Enabled bool     `json:"enabled"`
-	Words   []string `json:"words"`
+	Enabled   bool   `json:"enabled"`
+	WordsFile string `json:"words_file"`
 }
 
 func newConfig(data json.RawMessage) (config, error) {
@@ -27,6 +32,28 @@ func newConfig(data json.RawMessage) (config, error) {
 		return cfg, fmt.Errorf("profanityfilter: failed to parse config: %s", err)
 	}
 	return cfg, nil
+}
+
+// loadWords reads the banned-word list from a flat JSON array file, e.g.
+// ["fuck", "shit", ...] (see pbs-settings/profanity_words.json). An empty
+// path is a clean no-op (zero words) — matches the module's existing
+// "unconfigured is silent, not an error" convention. A configured-but-
+// unreadable-or-malformed file fails loudly (Builder returns an error,
+// which aborts PBS startup) rather than silently running with an inert
+// filter — see docs/architecture/profanity-filter.md.
+func loadWords(path string) ([]string, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("profanityfilter: failed to read words_file %q: %s", path, err)
+	}
+	var words []string
+	if err := jsonutil.UnmarshalValid(data, &words); err != nil {
+		return nil, fmt.Errorf("profanityfilter: failed to parse words_file %q: %s", path, err)
+	}
+	return words, nil
 }
 
 // compileWordPatterns builds one case-insensitive, word-boundary-anchored

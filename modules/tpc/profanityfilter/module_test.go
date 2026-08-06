@@ -3,6 +3,8 @@ package profanityfilter
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
@@ -13,12 +15,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testBuilder(t *testing.T, words []string) Module {
+// writeWordsFile writes words as a flat JSON array to a temp file, mirroring
+// the real pbs-settings/profanity_words.json format, and returns its path.
+func writeWordsFile(t *testing.T, words []string) string {
 	t.Helper()
-	cfg, err := json.Marshal(map[string]interface{}{
-		"enabled": true,
-		"words":   words,
-	})
+	data, err := json.Marshal(words)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "words.json")
+	require.NoError(t, os.WriteFile(path, data, 0644))
+	return path
+}
+
+func buildModule(t *testing.T, enabled bool, words []string) Module {
+	t.Helper()
+	cfgMap := map[string]interface{}{"enabled": enabled}
+	if words != nil {
+		cfgMap["words_file"] = writeWordsFile(t, words)
+	}
+	cfg, err := json.Marshal(cfgMap)
 	require.NoError(t, err)
 
 	built, err := Builder(cfg, moduledeps.ModuleDeps{})
@@ -26,6 +40,11 @@ func testBuilder(t *testing.T, words []string) Module {
 	module, ok := built.(Module)
 	require.True(t, ok)
 	return module
+}
+
+func testBuilder(t *testing.T, words []string) Module {
+	t.Helper()
+	return buildModule(t, true, words)
 }
 
 func thradImp(content string) openrtb2.Imp {
@@ -156,10 +175,29 @@ func TestChecksEveryImpNotJustFirst(t *testing.T) {
 }
 
 func TestDisabledModuleNeverRejects(t *testing.T) {
-	built, err := Builder(json.RawMessage(`{"enabled": false, "words": ["fuck"]}`), moduledeps.ModuleDeps{})
-	require.NoError(t, err)
-	module := built.(Module)
-
+	module := buildModule(t, false, []string{"fuck"})
 	result := handle(t, module, []openrtb2.Imp{thradImp("this is fucking great")})
 	assert.False(t, result.Reject)
+}
+
+func TestBuilderErrorsOnMissingWordsFile(t *testing.T) {
+	cfg, err := json.Marshal(map[string]interface{}{
+		"enabled":    true,
+		"words_file": filepath.Join(t.TempDir(), "does-not-exist.json"),
+	})
+	require.NoError(t, err)
+	_, err = Builder(cfg, moduledeps.ModuleDeps{})
+	assert.Error(t, err)
+}
+
+func TestBuilderErrorsOnMalformedWordsFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "words.json")
+	require.NoError(t, os.WriteFile(path, []byte("not valid json"), 0644))
+	cfg, err := json.Marshal(map[string]interface{}{
+		"enabled":    true,
+		"words_file": path,
+	})
+	require.NoError(t, err)
+	_, err = Builder(cfg, moduledeps.ModuleDeps{})
+	assert.Error(t, err)
 }

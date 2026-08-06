@@ -1,8 +1,9 @@
 // Package profanityfilter rejects an entire auction, before any bidder is
 // called, if the conversation text carried in a Thrad imp's
 // ext.prebid.bidder.thrad.messages[].content contains a word from a
-// configured banned-word list. See pbs-settings/pbs.yaml's
-// hooks.modules.tpc.profanityfilter block for the actual word list and
+// configured banned-word list. The list lives in
+// pbs-settings/profanity_words.json, referenced by path from pbs.yaml's
+// hooks.modules.tpc.profanityfilter.words_file — see
 // docs/architecture/profanity-filter.md for how to update it.
 package profanityfilter
 
@@ -21,19 +22,24 @@ import (
 // demand partner", so this documents our own.
 const ContentPolicyViolation = 501
 
-// Builder reads the module's global word list once at PBS startup from
-// pbs.yaml's hooks.modules.tpc.profanityfilter block and compiles it into
-// regexes — no per-request parsing cost, no per-account config (see the
-// package doc / plan notes for why a single platform-wide list is enough
-// today).
+// Builder reads the module's global word list once at PBS startup — the
+// list itself lives in the file referenced by pbs.yaml's
+// hooks.modules.tpc.profanityfilter.words_file, not inline in pbs.yaml —
+// and compiles it into regexes — no per-request parsing cost, no
+// per-account config (see the package doc / plan notes for why a single
+// platform-wide list is enough today).
 func Builder(cfg json.RawMessage, _ moduledeps.ModuleDeps) (interface{}, error) {
 	c, err := newConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
+	words, err := loadWords(c.WordsFile)
+	if err != nil {
+		return nil, err
+	}
 	return Module{
 		enabled:  c.Enabled,
-		patterns: compileWordPatterns(c.Words),
+		patterns: compileWordPatterns(words),
 	}, nil
 }
 
