@@ -26,6 +26,19 @@ package gravity
 // Static params (placement, placementId) live in the PBS Stored Imp.
 // Dynamic params (userId, sessionId, messages) are injected per-auction
 // via window.tpc.data → tpcBidAdapter → imp.ext.prebid.bidder.gravity.
+//
+// ── Hashed email (logged-in users) ────────────────────────────────────────────
+//
+// Added 2026-08-10. ExtImpGravity.HashedEmail (imp.ext.prebid.bidder.gravity.
+// hashedEmail) forwards through as gravityUser.EmailHash — "email_hash" on
+// the wire, per Gravity's real API, NOT "hashed_email" (a field-name bug
+// existed here for a while: this field was defined but silently never
+// worked, since Gravity's API accepts-and-ignores unrecognized user-object
+// fields rather than rejecting them). Publisher-side responsibility to hash
+// correctly (SHA-256 of email.strip().lower()) before it ever reaches us —
+// see ExtImpGravity's doc comment. Thrad has no equivalent; their docs
+// explicitly prohibit PII (including hashed email) in their userId field,
+// so this is Gravity-only.
 
 import (
 	"encoding/json"
@@ -66,8 +79,18 @@ type gravityPlacement struct {
 }
 
 type gravityUser struct {
-	ID          string `json:"id"`
-	HashedEmail string `json:"hashed_email,omitempty"`
+	ID string `json:"id"`
+	// EmailHash — field name confirmed against Gravity's own OpenAPI spec
+	// (docs.trygravity.ai/api-reference/openapi.json, UserObject schema):
+	// "email_hash", not "hashed_email". Getting this wrong is silent, not a
+	// hard error — Gravity's API accepts unrecognized user-object fields and
+	// stores them as generic request context rather than rejecting them, so
+	// a wrong field name here would never surface as a bid failure, just as
+	// hashed-email matching quietly never working. Must be SHA-256 of
+	// email.strip().lower() (their normalization requirement) — hashing
+	// happens publisher-side, before it ever reaches us (see
+	// ExtImpGravity.HashedEmail's doc comment).
+	EmailHash   string `json:"email_hash,omitempty"`
 	HashedPhone string `json:"hashed_phone,omitempty"`
 }
 
@@ -180,7 +203,7 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 			},
 			User: gravityUser{
 				ID:          gravExt.UserID,
-				HashedEmail: gravExt.HashedEmail,
+				EmailHash:   gravExt.HashedEmail,
 				HashedPhone: gravExt.HashedPhone,
 			},
 			ExcludedTopics: gravExt.ExcludedTopics,

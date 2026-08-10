@@ -20,7 +20,22 @@ type ExtImpGravity struct {
 	Relevancy      *float64 `json:"relevancy,omitempty"`
 	BidPrice       float64  `json:"bidPrice,omitempty"` // overrides global extra_info.bidPrice when set
 
-	// Optional user identity signals.
+	// Optional user identity signals for logged-in users — added 2026-08-10.
+	// Hashing happens publisher-side (via window.tpc.data.hashedEmail — see
+	// docs/integration/external-integration.md), never in our own client
+	// bundle or PBS: we never see the plain email at all. Gravity requires
+	// SHA-256 of email.strip().lower() specifically (their normalization
+	// requirement, confirmed against their OpenAPI spec) — a different hash
+	// algorithm or unnormalized input won't match their identity graph, but
+	// PBS has no way to detect that; it's the publisher's responsibility to
+	// hash correctly before ever setting this field.
+	//
+	// Thrad has no equivalent field and no hashed-email support at all —
+	// their docs explicitly say not to put email/name/PII in their userId
+	// field, so this is Gravity-only, not a general "user identity" concept
+	// shared across both bidders. See adapters/gravity/gravity.go's
+	// gravityUser.EmailHash for the (differently-named) field this maps to
+	// in Gravity's actual API request.
 	HashedEmail string `json:"hashedEmail,omitempty"`
 	HashedPhone string `json:"hashedPhone,omitempty"`
 }
