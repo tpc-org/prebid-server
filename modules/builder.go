@@ -6,6 +6,7 @@ import (
 	prebidRulesengine "github.com/prebid/prebid-server/v4/modules/prebid/rulesengine"
 	wurflDevicedetection "github.com/prebid/prebid-server/v4/modules/scientiamobile/wurfl_devicedetection"
 	scope3Rtd "github.com/prebid/prebid-server/v4/modules/scope3/rtd"
+	tpcActivitylog "github.com/prebid/prebid-server/v4/modules/tpc/activitylog"
 	tpcProfanityfilter "github.com/prebid/prebid-server/v4/modules/tpc/profanityfilter"
 )
 
@@ -28,6 +29,7 @@ func builders() ModuleBuilders {
 		},
 		"tpc": {
 			"profanityfilter": tpcProfanityfilter.Builder,
+			"activitylog":     tpcActivitylog.Builder,
 		},
 	}
 }
