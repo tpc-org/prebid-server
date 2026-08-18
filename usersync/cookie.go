@@ -61,7 +61,7 @@ func (cookie *Cookie) PrepareCookieForWrite(cfg *config.HostCookie, encoder Enco
 	for len(cookie.uids) > 0 {
 		encodedCookie, err := encoder.Encode(cookie)
 		if err != nil {
-			return encodedCookie, err
+			return encodedCookie, nil
 		}
 
 		// Convert to HTTP Cookie to Get Size

@@ -68,7 +68,7 @@ func processRequest(t *testing.T, module Module, imps []openrtb2.Imp) hookstage.
 	return result
 }
 
-func processResponse(t *testing.T, module Module, moduleCtx *hookstage.ModuleContext, resp *openrtb2.BidResponse) {
+func processResponse(t *testing.T, module Module, moduleCtx hookstage.ModuleContext, resp *openrtb2.BidResponse) {
 	t.Helper()
 	payload := hookstage.AuctionResponsePayload{BidResponse: resp}
 	_, err := module.HandleAuctionResponseHook(context.Background(), hookstage.ModuleInvocationContext{ModuleContext: moduleCtx}, payload)

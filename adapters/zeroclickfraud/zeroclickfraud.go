@@ -14,7 +14,6 @@ import (
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 	"github.com/prebid/prebid-server/v4/util/jsonutil"
-	"github.com/prebid/prebid-server/v4/util/urlutil"
 )
 
 type ZeroClickFraudAdapter struct {
@@ -150,7 +149,7 @@ func getBidderParams(imp *openrtb2.Imp) (*openrtb_ext.ExtImpZeroClickFraud, erro
 		}
 	}
 
-	if !urlutil.IsSafeHost(zeroclickfraudExt.Host) {
+	if len(zeroclickfraudExt.Host) < 1 {
 		return nil, &errortypes.BadInput{
 			Message: "Invalid/Missing Host",
 		}

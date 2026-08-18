@@ -47,10 +47,7 @@ func handleBidderRequestHook(
 	updateCatTax(cfg, payload, &blockingAttributes, &changeSet)
 
 	result.ChangeSet = changeSet
-	if result.ModuleContext == nil {
-		result.ModuleContext = hookstage.NewModuleContext()
-	}
-	result.ModuleContext.Set(payload.Bidder, blockingAttributes)
+	result.ModuleContext = hookstage.ModuleContext{payload.Bidder: blockingAttributes}
 
 	return result, nil
 }

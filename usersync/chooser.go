@@ -46,9 +46,8 @@ type Request struct {
 // Cooperative specifies the settings for cooperative syncing for a given request, where bidders
 // other than those used by the publisher are considered for syncing.
 type Cooperative struct {
-	Enabled            bool
-	PriorityGroups     [][]string
-	PriorityGroupsOnly bool
+	Enabled        bool
+	PriorityGroups [][]string
 }
 
 // Result specifies which bidders were included in the evaluation and which syncers were chosen.

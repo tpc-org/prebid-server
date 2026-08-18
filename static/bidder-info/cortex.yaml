@@ -1,7 +1,5 @@
 aliasOf: "teqblaze"
-# We have the following regional endpoint domains:  'eu' - for EU, 'us-east' - for US_EAST, 'apac' - for APAC
-# Please deploy this config in each of your datacenters with the appropriate regional subdomain
-endpoint: "https://REGION.targetadserver.com/pserver"
+endpoint: "https://eu.targetadserver.com/pserver"
 maintainer:
   email: "dev@cortextech.it"
 capabilities:
@@ -13,7 +11,7 @@ capabilities:
   app:
     mediaTypes:
     - banner
-    - video
+    - video 
     - native
 userSync:
   redirect:

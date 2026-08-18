@@ -13,7 +13,6 @@ import (
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 	"github.com/prebid/prebid-server/v4/util/jsonutil"
-	"github.com/prebid/prebid-server/v4/util/urlutil"
 )
 
 type adapter struct {
@@ -153,9 +152,6 @@ func getBidderParams(imp *openrtb2.Imp) (*openrtb_ext.ExtImpTrafficGate, error) 
 		return nil, &errortypes.BadInput{
 			Message: "Bidder parameters required",
 		}
-	}
-	if !urlutil.IsSafeHost(TrafficGateExt.Host) {
-		return nil, &errortypes.BadInput{Message: "Invalid Host"}
 	}
 
 	return &TrafficGateExt, nil

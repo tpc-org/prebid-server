@@ -44,8 +44,6 @@ const (
 	deviceInfoHardwareFamily        deviceInfoProperty = "HardwareFamily"
 	deviceInfoHardwareModelVariants deviceInfoProperty = "HardwareModelVariants"
 	deviceInfoScreenInchesHeight    deviceInfoProperty = "ScreenInchesHeight"
-	deviceInfoHardwareNamePrefix    deviceInfoProperty = "HardwareNamePrefix"
-	deviceInfoHardwareNameVersion   deviceInfoProperty = "HardwareNameVersion"
 )
 
 func (x deviceInfoExtractor) extract(results Results, ua string) (*deviceInfo, error) {
@@ -71,8 +69,6 @@ func (x deviceInfoExtractor) extract(results Results, ua string) (*deviceInfo, e
 	hardwareFamily := x.getValue(results, deviceInfoHardwareFamily)
 	hardwareModelVariants := x.getValue(results, deviceInfoHardwareModelVariants)
 	screenInchedHeight, _ := strconv.ParseFloat(x.getValue(results, deviceInfoScreenInchesHeight), 10)
-	hardwareNamePrefix := x.getValue(results, deviceInfoHardwareNamePrefix)
-	hardwareNameVersion := x.getValue(results, deviceInfoHardwareNameVersion)
 
 	p := &deviceInfo{
 		HardwareVendor:        hardwareVendor,
@@ -94,8 +90,6 @@ func (x deviceInfoExtractor) extract(results Results, ua string) (*deviceInfo, e
 		HardwareModel:         hardwareModel,
 		HardwareFamily:        hardwareFamily,
 		HardwareModelVariants: hardwareModelVariants,
-		HardwareNamePrefix:    hardwareNamePrefix,
-		HardwareNameVersion:   hardwareNameVersion,
 		ScreenInchesHeight:    screenInchedHeight,
 	}
 

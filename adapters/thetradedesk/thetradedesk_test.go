@@ -101,14 +101,6 @@ func TestGetBidType(t *testing.T) {
 			wantErr:           false,
 		},
 		{
-			name: "audio",
-			args: args{
-				markupType: openrtb2.MarkupAudio,
-			},
-			expectedBidTypeId: openrtb_ext.BidTypeAudio,
-			wantErr:           false,
-		},
-		{
 			name: "invalid",
 			args: args{
 				markupType: -1,

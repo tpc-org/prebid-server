@@ -13,7 +13,6 @@ import (
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 	"github.com/prebid/prebid-server/v4/util/jsonutil"
-	"github.com/prebid/prebid-server/v4/util/urlutil"
 )
 
 type adapter struct {
@@ -93,9 +92,6 @@ func (a *adapter) getImpressionExt(imp *openrtb2.Imp) (*openrtb_ext.ExtKayzen, e
 }
 
 func (a *adapter) buildEndpointURL(params *openrtb_ext.ExtKayzen) (string, error) {
-	if !urlutil.IsSafeHost(params.Zone) {
-		return "", &errortypes.BadInput{Message: "Invalid Zone"}
-	}
 	endpointParams := macros.EndpointTemplateParams{
 		ZoneID:    params.Zone,
 		AccountID: params.Exchange,

@@ -57,18 +57,16 @@ func merge(val1, val2 []stringEvidence) []stringEvidence {
 	return evidence
 }
 
-func (x *defaultEvidenceExtractor) extract(ctx *hookstage.ModuleContext) ([]onpremise.Evidence, string, error) {
+func (x *defaultEvidenceExtractor) extract(ctx hookstage.ModuleContext) ([]onpremise.Evidence, string, error) {
 	if ctx == nil {
 		return nil, "", errors.New("context is nil")
 	}
 
-	evidenceFromSuaCtx, _ := ctx.Get(evidenceFromSuaCtxKey)
-	suaStrings, err := x.getEvidenceStrings(evidenceFromSuaCtx)
+	suaStrings, err := x.getEvidenceStrings(ctx[evidenceFromSuaCtxKey])
 	if err != nil {
 		return nil, "", fmt.Errorf("error extracting sua evidence: %w", err)
 	}
-	evidenceFromHeadersCtx, _ := ctx.Get(evidenceFromHeadersCtxKey)
-	headerString, err := x.getEvidenceStrings(evidenceFromHeadersCtx)
+	headerString, err := x.getEvidenceStrings(ctx[evidenceFromHeadersCtxKey])
 	if err != nil {
 		return nil, "", fmt.Errorf("error extracting header evidence: %w", err)
 	}

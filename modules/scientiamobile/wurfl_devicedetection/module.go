@@ -75,8 +75,8 @@ func (m Module) HandleEntrypointHook(ctx context.Context, invocationCtx hookstag
 			header[k] = payload.Request.Header.Get(k)
 		}
 	}
-	moduleContext := hookstage.NewModuleContext()
-	moduleContext.Set(wurflHeaderCtxKey, header)
+	moduleContext := make(hookstage.ModuleContext)
+	moduleContext[wurflHeaderCtxKey] = header
 	result.ModuleContext = moduleContext
 
 	return result, nil
@@ -101,11 +101,7 @@ func (m Module) HandleRawAuctionHook(
 		return result, nil
 	}
 
-	headers, ok := invocationCtx.ModuleContext.Get(wurflHeaderCtxKey)
-	if !ok {
-		return result, hookexecution.NewFailure("invalid module context type")
-	}
-	rawHeaders, ok := headers.(map[string]string)
+	rawHeaders, ok := invocationCtx.ModuleContext[wurflHeaderCtxKey].(map[string]string)
 	if !ok {
 		return result, hookexecution.NewFailure("invalid module context type")
 	}

@@ -83,19 +83,16 @@ func TestHandleEntrypointHook(t *testing.T) {
 	result, err := module.HandleEntrypointHook(ctx, miCtx, payload)
 
 	assert.NoError(t, err)
-	asyncRequest, _ := result.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, result.ModuleContext[asyncRequestKey])
 }
 
 func TestHandleAuctionResponseHook_NoSegments(t *testing.T) {
 	module := &Module{}
 	ctx := context.Background()
 	miCtx := hookstage.ModuleInvocationContext{
-		ModuleContext: func() *hookstage.ModuleContext {
-			mctx := hookstage.NewModuleContext()
-			mctx.Set("segments", &sync.Map{})
-			return mctx
-		}(),
+		ModuleContext: hookstage.ModuleContext{
+			"segments": &sync.Map{},
+		},
 	}
 	payload := hookstage.AuctionResponsePayload{}
 
@@ -259,8 +256,7 @@ func TestScope3APIIntegrationNoSegments(t *testing.T) {
 	// Test entrypoint hook
 	entrypointResult, err := module.HandleEntrypointHook(ctx, hookstage.ModuleInvocationContext{}, getTestEntrypointPayload(t))
 	require.NoError(t, err)
-	asyncRequest, _ := entrypointResult.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, entrypointResult.ModuleContext[asyncRequestKey])
 
 	payload := hookstage.ProcessedAuctionRequestPayload{
 		Request: &openrtb_ext.RequestWrapper{
@@ -363,8 +359,7 @@ func TestScope3APIIntegrationWithTargeting(t *testing.T) {
 	// Test entrypoint hook
 	entrypointResult, err := module.HandleEntrypointHook(ctx, hookstage.ModuleInvocationContext{}, getTestEntrypointPayload(t))
 	require.NoError(t, err)
-	asyncRequest, _ := entrypointResult.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, entrypointResult.ModuleContext[asyncRequestKey])
 
 	// Create test request payload
 	width := int64(300)
@@ -546,8 +541,7 @@ func TestScope3APIIntegrationWithTargetingNoScope3Section(t *testing.T) {
 	// Test entrypoint hook
 	entrypointResult, err := module.HandleEntrypointHook(ctx, hookstage.ModuleInvocationContext{}, getTestEntrypointPayload(t))
 	require.NoError(t, err)
-	asyncRequest, _ := entrypointResult.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, entrypointResult.ModuleContext[asyncRequestKey])
 
 	// Create test request payload
 	width := int64(300)
@@ -690,8 +684,7 @@ func TestScope3APIIntegrationWithExistingPrebidTargeting(t *testing.T) {
 	// Test entrypoint hook
 	entrypointResult, err := module.HandleEntrypointHook(ctx, hookstage.ModuleInvocationContext{}, getTestEntrypointPayload(t))
 	require.NoError(t, err)
-	asyncRequest, _ := entrypointResult.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, entrypointResult.ModuleContext[asyncRequestKey])
 
 	// Create test request payload
 	width := int64(300)
@@ -801,8 +794,7 @@ func TestScope3APIIntegrationWithExistingPrebidNoTargeting(t *testing.T) {
 	// Test entrypoint hook
 	entrypointResult, err := module.HandleEntrypointHook(ctx, hookstage.ModuleInvocationContext{}, getTestEntrypointPayload(t))
 	require.NoError(t, err)
-	asyncRequest, _ := entrypointResult.ModuleContext.Get(asyncRequestKey)
-	assert.NotNil(t, asyncRequest)
+	assert.NotNil(t, entrypointResult.ModuleContext[asyncRequestKey])
 
 	// Create test request payload
 	width := int64(300)
