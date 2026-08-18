@@ -176,7 +176,9 @@ func (m Module) HandleProcessedAuctionHook(
 		}
 	}
 
-	result.ModuleContext = hookstage.ModuleContext{moduleContextKey: stashed}
+	moduleCtx := hookstage.NewModuleContext()
+	moduleCtx.Set(moduleContextKey, stashed)
+	result.ModuleContext = moduleCtx
 	return result, nil
 }
 
@@ -192,7 +194,7 @@ func (m Module) HandleAuctionResponseHook(
 		return result, nil
 	}
 
-	raw, ok := miCtx.ModuleContext[moduleContextKey]
+	raw, ok := miCtx.ModuleContext.Get(moduleContextKey)
 	if !ok {
 		// No stashed data — either ProcessedAuctionRequest never ran for
 		// this request (e.g. rejected by an earlier-in-sequence hook, see
