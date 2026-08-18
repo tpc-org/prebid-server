@@ -1,7 +1,15 @@
 # We have the following regional endpoint domains: 'east' - for US_EAST, 'eu' - for EU
 # Please deploy this config in each of your datacenters with the appropriate regional subdomain
+#
+# TPC fork note: we deploy one shared image to both eu-central-1 and
+# us-east-1 (no per-region build step), so a single endpoint value has to
+# cover both. Not a real bidder we use (no entry in pbs.yaml's adapters
+# config) -- disabled, same as static/bidder-info/{appStockSSP,selectmedia}.yaml,
+# which is what actually matters here; the 'eu' endpoint below only exists
+# to satisfy PBS's startup URL validation.
+disabled: true
 aliasOf: "teqblaze"
-endpoint: "https://#{REGION}#.152media-ssp.com/pserver"
+endpoint: "https://eu.152media-ssp.com/pserver"
 maintainer:
   email: "info@152media.com"
 gvlVendorID: 1111
