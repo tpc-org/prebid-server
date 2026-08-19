@@ -75,6 +75,19 @@ git push origin upstream-pr/<short-description>
 fork-only files leak into upstream PRs (which the script in step 3
 will catch).
 
+## Pulling upstream changes into this fork
+
+The opposite direction from the workflow above. Full procedure,
+including a real production incident from the 2026-08-18 sync (a new
+upstream bidder-info file with an unresolved config placeholder crashed
+both PBS regions — `go build`/`go test` passing gave false confidence,
+since neither exercises PBS's own startup config validation) is in
+`tpc-org/docs`'s `runbooks/upstream-sync.md` — **read it before
+syncing**, especially the step that boots the real binary against real
+config before deploying, and the note on not naively re-`git merge`ing
+a branch after reverting its earlier merge (silently drops content —
+revert-the-revert + cherry-pick instead).
+
 ## How this fork relates to the rest of the TPC stack
 tpc-org/prebid-server (this fork — the Go source)
 │ git push to bare repos on EC2 hosts
