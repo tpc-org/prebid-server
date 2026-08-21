@@ -123,6 +123,7 @@ import (
 	"github.com/prebid/prebid-server/v4/adapters/huaweiads"
 	"github.com/prebid/prebid-server/v4/adapters/imds"
 	"github.com/prebid/prebid-server/v4/adapters/impactify"
+	"github.com/prebid/prebid-server/v4/adapters/imprezia"
 	"github.com/prebid/prebid-server/v4/adapters/improvedigital"
 	"github.com/prebid/prebid-server/v4/adapters/infytv"
 	"github.com/prebid/prebid-server/v4/adapters/inmobi"
@@ -405,6 +406,7 @@ func newAdapterBuilders() map[openrtb_ext.BidderName]adapters.Builder {
 		openrtb_ext.BidderHuaweiAds:         huaweiads.Builder,
 		openrtb_ext.BidderImds:              imds.Builder,
 		openrtb_ext.BidderImpactify:         impactify.Builder,
+		openrtb_ext.BidderImprezia:          imprezia.Builder,
 		openrtb_ext.BidderImprovedigital:    improvedigital.Builder,
 		openrtb_ext.BidderInfyTV:            infytv.Builder,
 		openrtb_ext.BidderInMobi:            inmobi.Builder,

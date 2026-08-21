@@ -1,0 +1,10 @@
+endpoint: "https://api.imprezia.ai/v1/ads/chat"
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - native
+  app:
+    mediaTypes:
+      - native

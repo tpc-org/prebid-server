@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Imprezia Adapter Params",
+  "description": "A schema which validates params accepted by the Imprezia adapter",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "string",
+      "description": "The user's query/message being monetized"
+    },
+    "response": {
+      "type": "string",
+      "description": "The AI-generated response text to monetize"
+    },
+    "userId": {
+      "type": "string",
+      "description": "Optional tracking/personalization identifier"
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Optional session identifier"
+    },
+    "siteId": {
+      "type": "string",
+      "description": "Imprezia surface UUID for this publisher, e.g. sayhola's cbc68717-3d85-4d55-9a29-e7a1a22ab4ef"
+    },
+    "placementId": {
+      "type": "string",
+      "description": "Our own stable placement label, e.g. chat_followup — auto-registers on first successful request if unregistered"
+    },
+    "maxCards": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max sponsored cards to return (default 2 on Imprezia's side; we request 1 by default)"
+    },
+    "bidPrice": {
+      "type": "number",
+      "description": "Overrides global extra_info.bidPrice when set — Imprezia returns no price"
+    }
+  },
+  "required": ["request", "response"]
+}
