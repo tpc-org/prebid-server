@@ -24,6 +24,11 @@ package imprezia
 // endpoint/key are used verbatim (no macro templating) when
 // BidRequest.Test == 1.
 //
+// Sandbox and production are separate account namespaces — a real
+// production siteId (e.g. sayhola's) is rejected by the sandbox endpoint
+// with 400 "Invalid publisher hierarchy" (confirmed live). Don't test a
+// real siteId against the sandbox host expecting it to work.
+//
 // ── No price field ───────────────────────────────────────────────────────
 //
 // Same gap as Gravity: Imprezia's response has no price/CPM anywhere.
@@ -45,30 +50,52 @@ package imprezia
 // just one bidder, when a multi-bidder stored imp is missing a
 // bidder-params-declared-required field).
 //
-// ── Response shape: UNVERIFIED as of this writing ──────────────────────────
+// ── Response shape: confirmed live against sandbox 2026-08-21 ─────────────
 //
-// Imprezia's docs state their SDK's MonetizeResponse type (monetizedResponse/
-// linkData/originalResponse/metadata) nests identically "at the top level of
-// a Chat Ads response" — but the account has been returning
-// 403 partner_chat_ads_not_enabled on every /v1/ads/chat call so far
-// (confirmed after a 100-request warmup batch), so this has never been
-// checked against a real response body. monetizeResponse below is written
-// to match their documented types exactly; if a real response doesn't
-// match, rewrite this struct, don't patch around a wrong assumption — see
-// the live-verification checklist in the Imprezia section of
-// docs/integration/internal-onboarding.md before wiring this adapter into
-// any real Stored Imp.
+// Imprezia's own docs claim their SDK's MonetizeResponse type
+// (monetizedResponse/linkData/originalResponse/metadata) maps onto the raw
+// Chat Ads API response — this turned out to be WRONG. The real
+// POST /v1/ads/chat response (confirmed via multiple live sandbox calls,
+// varying query content and maxCards) is a flat, RTB-shaped single-ad
+// object, not the SDK's multi-card-embedded-in-text shape:
 //
-// ── Impression tracking: open question, not resolved here ─────────────────
+//	{
+//	  "requestId": "req_...", "siteId": "uuid", "placementId": null|"string",
+//	  "ad": {
+//	    "creative": {"brandName","title","description","cta","imageUrl"},
+//	    "clickUrl": "https://go-sandbox.imprezia.ai/go/...",
+//	    "trackers": {"impression": ["https://..."], "mrc50": ["https://..."]},
+//	    "impression": {"impressionUuid","beaconToken":{...},"servedAt","publisherId"}
+//	  }
+//	}
 //
-// Gravity/Thrad both return a flat impression-pixel URL we fire ourselves
-// (Gravity's ad.ImpURL). Imprezia's confirmed types have no such field —
-// LinkData.hyperlink is a tracking-wrapped CLICK url only. Impression
-// tracking appears to route through a browser-SDK-specific
-// POST /v1/events/sdk-impression endpoint keyed by impressionUuid/
-// trackingId, with no confirmed server-to-server equivalent. Do not guess
-// a pixel location — MakeBids ships v1 with no imptrackers. Confirm once a
-// real response is captured (see live-verification checklist).
+// maxCards has no effect on this shape — confirmed maxCards:2 still
+// returns a single "ad" object, never an array. Sandbox always returned
+// the same fixed Imprezia house-ad creative regardless of query content
+// (normal sandbox behavior — a real no-fill case, i.e. a response with no
+// "ad" key at all, has not been observed but is handled defensively
+// below). Two distinct error shapes exist: 403 auth/authz errors nest
+// under `{"error":{"type","code","message"}}` (see MakeBids' status
+// handling below, which just embeds the raw body rather than parsing
+// either shape); 400 validation errors are flatter,
+// `{"error":"string","message":"string"}`.
+//
+// Not yet independently re-confirmed against the *production* host/key
+// (still blocked on 403 partner_chat_ads_not_enabled as of this writing)
+// — sandbox and production are documented to share the same API surface,
+// but re-verify prod once its 403 clears rather than assuming.
+//
+// ── Impression tracking: resolved ──────────────────────────────────────────
+//
+// ad.trackers.impression[] are real, plain, fireable pixel URLs (confirmed
+// live) — fired via imptrackers in the native adm below, same as
+// Gravity/Thrad. ad.trackers.mrc50[] (MRC 50%-viewability trackers) are
+// fired the same way — this codebase's native adm has no separate
+// viewability-tracker slot, and every entry in imptrackers gets fired
+// together by the rendering side regardless of which sub-category it
+// came from. ad.impression.beaconToken is a distinct, more complex signed
+// server-to-server postback mechanism that duplicates what the plain
+// tracker URLs already give us — not used here.
 
 import (
 	"encoding/json"
@@ -93,8 +120,10 @@ type extraInfo struct {
 	BidPrice        float64 `json:"bidPrice"`
 }
 
-// defaultMaxCards is what we request when ExtImpImprezia.MaxCards is unset —
-// one PBS bid per imp, matching how Gravity/Thrad each produce a single bid.
+// defaultMaxCards is what we request when ExtImpImprezia.MaxCards is unset.
+// Confirmed live that Imprezia's Chat Ads API always returns a single "ad"
+// object regardless of this value — kept only because it's a documented
+// request field, not because it changes response shape on our side.
 const defaultMaxCards = 1
 
 // ── Imprezia API types ─────────────────────────────────────────────────────────
@@ -110,54 +139,39 @@ type impreziaRequest struct {
 	MaxCards    int    `json:"maxCards,omitempty"`
 }
 
-// monetizeResponse mirrors Imprezia's documented MonetizeResponse SDK type —
-// see the UNVERIFIED note in the package doc above.
-type monetizeResponse struct {
-	MonetizedResponse string              `json:"monetizedResponse"`
-	LinkData          map[string]linkData `json:"linkData"`
-	OriginalResponse  string              `json:"originalResponse"`
-	Metadata          monetizeMetadata    `json:"metadata"`
+// chatAdsResponse is the real, confirmed POST /v1/ads/chat response shape
+// — see the package doc's "Response shape" section.
+type chatAdsResponse struct {
+	RequestID   string  `json:"requestId"`
+	SiteID      string  `json:"siteId"`
+	PlacementID *string `json:"placementId"`
+	Ad          *ad     `json:"ad"`
 }
 
-type monetizeMetadata struct {
-	UserID         string  `json:"userId,omitempty"`
-	SessionID      string  `json:"sessionId,omitempty"`
-	Timestamp      string  `json:"timestamp,omitempty"`
-	RequestID      string  `json:"requestId,omitempty"`
-	ProcessingTime float64 `json:"processingTime,omitempty"`
-	PublisherID    string  `json:"publisherId,omitempty"`
+type ad struct {
+	Creative   creative   `json:"creative"`
+	ClickURL   string     `json:"clickUrl"`
+	Trackers   trackers   `json:"trackers"`
+	Impression impression `json:"impression"`
 }
 
-type linkData struct {
-	StringLinkWord string            `json:"string_link_word"`
-	Hyperlink      string            `json:"hyperlink"`
-	TrackingID     string            `json:"trackingId"`
-	LinkType       string            `json:"linkType,omitempty"`
-	OriginalURL    string            `json:"originalUrl,omitempty"`
-	CTAText        string            `json:"ctaText,omitempty"`
-	Metadata       *linkDataMetadata `json:"metadata,omitempty"`
+type creative struct {
+	BrandName   string `json:"brandName"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	CTA         string `json:"cta,omitempty"`
+	ImageURL    string `json:"imageUrl,omitempty"`
 }
 
-type linkDataMetadata struct {
-	AffiliateID    string        `json:"affiliateId,omitempty"`
-	Commission     float64       `json:"commission,omitempty"`
-	BrandCategory  string        `json:"brandCategory,omitempty"`
-	PlacementType  string        `json:"placementType,omitempty"`
-	CardMetadata   *cardMetadata `json:"cardMetadata,omitempty"`
-	ImpressionUUID string        `json:"impressionUuid,omitempty"`
+type trackers struct {
+	Impression []string `json:"impression,omitempty"`
+	MRC50      []string `json:"mrc50,omitempty"`
 }
 
-type cardMetadata struct {
-	Title           string  `json:"title"`
-	Description     string  `json:"description,omitempty"`
-	BrandName       string  `json:"brandName"`
-	LogoURL         string  `json:"logoUrl,omitempty"`
-	CTAText         string  `json:"ctaText,omitempty"`
-	BackgroundColor string  `json:"backgroundColor,omitempty"`
-	AdAssetURL      *string `json:"adAssetUrl,omitempty"`
-	AdBannerHTML    string  `json:"adBannerHtml,omitempty"`
-	AdBannerWidth   int     `json:"adBannerWidth,omitempty"`
-	AdBannerHeight  int     `json:"adBannerHeight,omitempty"`
+type impression struct {
+	ImpressionUUID string `json:"impressionUuid,omitempty"`
+	ServedAt       string `json:"servedAt,omitempty"`
+	PublisherID    string `json:"publisherId,omitempty"`
 }
 
 // ── Adapter ───────────────────────────────────────────────────────────────────
@@ -301,14 +315,14 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		}}
 	}
 
-	var mResp monetizeResponse
-	if err := json.Unmarshal(response.Body, &mResp); err != nil {
+	var chatResp chatAdsResponse
+	if err := json.Unmarshal(response.Body, &chatResp); err != nil {
 		return nil, []error{&errortypes.BadServerResponse{
 			Message: fmt.Sprintf("imprezia: failed to parse response: %s", err),
 		}}
 	}
 
-	if len(mResp.LinkData) == 0 {
+	if chatResp.Ad == nil {
 		return nil, nil
 	}
 
@@ -316,11 +330,6 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		return nil, []error{&errortypes.BadServerResponse{
 			Message: "imprezia: got bid but request had no imps",
 		}}
-	}
-
-	link := selectLinkData(mResp.LinkData)
-	if link == nil {
-		return nil, nil
 	}
 
 	imp := request.Imp[0]
@@ -336,7 +345,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		}
 	}
 
-	nativeAdm, err := buildNativeAdm(link)
+	nativeAdm, err := buildNativeAdm(chatResp.Ad)
 	if err != nil {
 		return nil, []error{&errortypes.BadServerResponse{
 			Message: fmt.Sprintf("imprezia: failed to build native adm: %s", err),
@@ -344,13 +353,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 	}
 
 	var adomain []string
-	domainSource := ""
-	if link.OriginalURL != "" {
-		domainSource = link.OriginalURL
-	} else if link.Hyperlink != "" {
-		domainSource = link.Hyperlink
-	}
-	if host := extractHost(domainSource); host != "" {
+	if host := extractHost(chatResp.Ad.ClickURL); host != "" {
 		adomain = []string{host}
 	}
 
@@ -360,7 +363,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		Price:   bidPrice,
 		AdM:     nativeAdm,
 		ADomain: adomain,
-		CrID:    link.TrackingID,
+		CrID:    chatResp.Ad.Impression.ImpressionUUID,
 	}
 
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(1)
@@ -373,39 +376,22 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 	return bidderResponse, nil
 }
 
-// selectLinkData picks the sponsored-card entry from the linkData map. Map
-// iteration order isn't guaranteed in Go/JSON, so prefer an entry carrying
-// CardMetadata (the actual ad card, as opposed to a plain inline text link)
-// when more than one entry is present; otherwise take whichever is first.
-func selectLinkData(m map[string]linkData) *linkData {
-	var fallback *linkData
-	for k := range m {
-		entry := m[k]
-		if fallback == nil {
-			fallback = &entry
-		}
-		if entry.Metadata != nil && entry.Metadata.CardMetadata != nil {
-			return &entry
-		}
-	}
-	return fallback
-}
-
 // buildNativeAdm constructs an OpenRTB native adm string from an Imprezia
-// LinkData/CardMetadata pair.
+// ad object.
 //
 // Same 5-asset 0-4 scheme as Gravity/Thrad, to match what Prebid.js expects
 // from the legacy native ad unit definition (title→0, img→1, body→2,
 // sponsoredBy→3, cta→4):
 //
-//	0 = title        (required) — card headline
-//	1 = img/logo     (type 3, optional) — brand logo
-//	2 = data/body    (type 2, optional) — card description
+//	0 = title        (required) — creative headline
+//	1 = img          (type 3, optional) — creative image
+//	2 = data/body    (type 2, optional) — creative description
 //	3 = data/sponsor (type 1, optional) — brand name
 //	4 = data/cta     (extra) — call-to-action text
 //
-// No imptrackers — see the package doc's "Impression tracking" note.
-func buildNativeAdm(link *linkData) (string, error) {
+// imptrackers fires both ad.trackers.impression[] and ad.trackers.mrc50[]
+// — confirmed real, plain, fireable pixel URLs (see package doc).
+func buildNativeAdm(a *ad) (string, error) {
 	type nativeTitle struct {
 		Text string `json:"text"`
 	}
@@ -426,50 +412,41 @@ func buildNativeAdm(link *linkData) (string, error) {
 		Data  *nativeData  `json:"data,omitempty"`
 	}
 	type nativeAdmWrapper struct {
-		Ver    string        `json:"ver"`
-		Link   nativeLink    `json:"link"`
-		Assets []nativeAsset `json:"assets"`
-	}
-
-	var card *cardMetadata
-	if link.Metadata != nil {
-		card = link.Metadata.CardMetadata
-	}
-
-	headline := link.StringLinkWord
-	if card != nil && card.Title != "" {
-		headline = card.Title
+		Ver         string        `json:"ver"`
+		Link        nativeLink    `json:"link"`
+		Assets      []nativeAsset `json:"assets"`
+		ImpTrackers []string      `json:"imptrackers,omitempty"`
 	}
 
 	assets := []nativeAsset{
-		{ID: 0, Title: &nativeTitle{Text: headline}},
+		{ID: 0, Title: &nativeTitle{Text: a.Creative.Title}},
 	}
 
-	if card != nil {
-		if card.LogoURL != "" {
-			assets = append(assets, nativeAsset{ID: 1, Img: &nativeImg{URL: card.LogoURL, Type: 3}})
-		}
-		if card.Description != "" {
-			assets = append(assets, nativeAsset{ID: 2, Data: &nativeData{Value: card.Description}})
-		}
-		if card.BrandName != "" {
-			assets = append(assets, nativeAsset{ID: 3, Data: &nativeData{Value: card.BrandName}})
-		}
+	if a.Creative.ImageURL != "" {
+		assets = append(assets, nativeAsset{ID: 1, Img: &nativeImg{URL: a.Creative.ImageURL, Type: 3}})
+	}
+	if a.Creative.Description != "" {
+		assets = append(assets, nativeAsset{ID: 2, Data: &nativeData{Value: a.Creative.Description}})
+	}
+	if a.Creative.BrandName != "" {
+		assets = append(assets, nativeAsset{ID: 3, Data: &nativeData{Value: a.Creative.BrandName}})
 	}
 
-	ctaText := link.CTAText
-	if card != nil && card.CTAText != "" {
-		ctaText = card.CTAText
-	}
+	ctaText := a.Creative.CTA
 	if ctaText == "" {
 		ctaText = "Learn More"
 	}
 	assets = append(assets, nativeAsset{ID: 4, Data: &nativeData{Value: ctaText}})
 
+	var impTrackers []string
+	impTrackers = append(impTrackers, a.Trackers.Impression...)
+	impTrackers = append(impTrackers, a.Trackers.MRC50...)
+
 	adm := nativeAdmWrapper{
-		Ver:    "1.1",
-		Link:   nativeLink{URL: link.Hyperlink},
-		Assets: assets,
+		Ver:         "1.1",
+		Link:        nativeLink{URL: a.ClickURL},
+		Assets:      assets,
+		ImpTrackers: impTrackers,
 	}
 
 	b, err := json.Marshal(adm)

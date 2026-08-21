@@ -213,13 +213,14 @@ func TestMakeBidsNoContentReturnsNoBid(t *testing.T) {
 	}
 }
 
-// TestMakeBidsEmptyLinkDataReturnsNoBid confirms a real 200 response with
-// no cards (e.g. Imprezia had nothing relevant to show) is treated as a
-// clean no-fill, not an error.
-func TestMakeBidsEmptyLinkDataReturnsNoBid(t *testing.T) {
+// TestMakeBidsNoAdReturnsNoBid confirms a 200 response with no "ad" key is
+// treated as a clean no-fill, not an error. Not empirically observed live
+// (sandbox always returned a fixed house-ad creative in testing) but
+// handled defensively — see imprezia.go's package doc.
+func TestMakeBidsNoAdReturnsNoBid(t *testing.T) {
 	bidder := testBuilder(t)
 	request := &openrtb2.BidRequest{ID: "req-1", Imp: []openrtb2.Imp{{ID: "1"}}}
-	body := `{"monetizedResponse":"no ads here","linkData":{},"originalResponse":"no ads here","metadata":{"requestId":"r1"}}`
+	body := `{"requestId":"req_1","siteId":"fcdcaadc-5f24-4253-ada2-43777bb6b078","placementId":null,"ad":null}`
 	response := &adapters.ResponseData{StatusCode: http.StatusOK, Body: []byte(body)}
 
 	bidderResponse, errs := bidder.MakeBids(request, nil, response)
@@ -227,43 +228,47 @@ func TestMakeBidsEmptyLinkDataReturnsNoBid(t *testing.T) {
 		t.Fatalf("unexpected errors: %v", errs)
 	}
 	if bidderResponse != nil {
-		t.Errorf("expected nil bidderResponse for empty linkData, got %v", bidderResponse)
+		t.Errorf("expected nil bidderResponse for a null ad, got %v", bidderResponse)
 	}
 }
 
-// TestMakeBidsParsesCard is built against the documented MonetizeResponse
-// shape (see imprezia.go's package doc) — UNVERIFIED against a real
-// response as of this writing, since the account has returned
-// 403 partner_chat_ads_not_enabled on every live call so far. Update this
-// fixture once a real response is captured; see the live-verification
-// checklist in docs/integration/internal-onboarding.md's Imprezia section.
-func TestMakeBidsParsesCard(t *testing.T) {
+// TestMakeBidsParsesRealSandboxResponse uses a REAL response body captured
+// live against api-sandbox.imprezia.ai/v1/ads/chat on 2026-08-21 (request
+// ID/tokens/signed-URL params redacted/shortened for readability, but the
+// structure and field names are verbatim — see imprezia.go's package doc
+// for how this differs from Imprezia's own (wrong) documented SDK-response
+// claim). Confirmed live: maxCards has no effect on this shape, and the
+// same fixed house-ad creative was returned across multiple distinct
+// queries — this is normal sandbox behavior, not a bug in this test.
+func TestMakeBidsParsesRealSandboxResponse(t *testing.T) {
 	bidder := testBuilder(t)
 	imp := impreziaImp(t, baseImpreziaExt(nil))
 	request := &openrtb2.BidRequest{ID: "req-1", Imp: []openrtb2.Imp{imp}}
 
 	body := `{
-		"monetizedResponse": "Try these: ${card-0}",
-		"linkData": {
-			"card-0": {
-				"string_link_word": "Brooks Ghost",
-				"hyperlink": "https://ssp.imprezia.ai/track/click?id=abc",
-				"trackingId": "track-abc",
-				"originalUrl": "https://brooksrunning.com/ghost",
-				"metadata": {
-					"brandCategory": "footwear",
-					"cardMetadata": {
-						"title": "Brooks Ghost 16",
-						"description": "Cushioned neutral running shoe",
-						"brandName": "Brooks",
-						"logoUrl": "https://cdn.imprezia.ai/brooks-logo.png",
-						"ctaText": "Shop now"
-					}
-				}
+		"requestId": "req_1787339023476_avrt16nqa",
+		"siteId": "fcdcaadc-5f24-4253-ada2-43777bb6b078",
+		"placementId": null,
+		"ad": {
+			"creative": {
+				"brandName": "Imprezia",
+				"title": "Developers. Earn money with your AI app.",
+				"description": "Run ads like this, and get paid. Your AI flows are untouched. Earn like the big guys at: imprezia.ai",
+				"cta": "Sponsored",
+				"imageUrl": "https://storage.googleapis.com/imprezia-sandbox/keVMxd9oWPuLWrcq?X-Goog-Signature=abc123"
+			},
+			"clickUrl": "https://go-sandbox.imprezia.ai/go/bEh4zJa_c80YTv2ZjPT2vlJXYKAT_7Q35n9IamNeyWU",
+			"trackers": {
+				"impression": ["https://r-sandbox.imprezia.net/tp/impression-token-abc"],
+				"mrc50": ["https://r-sandbox.imprezia.net/tp/mrc50-token-abc"]
+			},
+			"impression": {
+				"impressionUuid": "c7395975-7454-4992-a828-012aec0136ac",
+				"beaconToken": {"token": "v5neUNfggWQ9IXX-rX4x0ygVeBxRGyHYiVr6Sy4vHZU", "issuedAt": 1787339026629, "kid": "20260427-01"},
+				"servedAt": "2026-08-21T19:03:46.636Z",
+				"publisherId": "dc01fce8-2239-4070-b50a-0441aef10f8f"
 			}
-		},
-		"originalResponse": "Try these:",
-		"metadata": {"requestId": "r1", "timestamp": "2026-08-21T00:00:00Z"}
+		}
 	}`
 	response := &adapters.ResponseData{StatusCode: http.StatusOK, Body: []byte(body)}
 
@@ -282,24 +287,37 @@ func TestMakeBidsParsesCard(t *testing.T) {
 	if bid.Bid.Price != 1.0 {
 		t.Errorf("Price = %v, want fallback bidPrice 1.0", bid.Bid.Price)
 	}
-	if len(bid.Bid.ADomain) != 1 || bid.Bid.ADomain[0] != "brooksrunning.com" {
-		t.Errorf("ADomain = %v, want [brooksrunning.com]", bid.Bid.ADomain)
+	if len(bid.Bid.ADomain) != 1 || bid.Bid.ADomain[0] != "go-sandbox.imprezia.ai" {
+		t.Errorf("ADomain = %v, want [go-sandbox.imprezia.ai] (from clickUrl's host)", bid.Bid.ADomain)
+	}
+	if bid.Bid.CrID != "c7395975-7454-4992-a828-012aec0136ac" {
+		t.Errorf("CrID = %q, want the impressionUuid", bid.Bid.CrID)
 	}
 
 	var adm map[string]interface{}
 	if err := json.Unmarshal([]byte(bid.Bid.AdM), &adm); err != nil {
 		t.Fatalf("failed to unmarshal adm: %v", err)
 	}
-	if link, ok := adm["link"].(map[string]interface{}); !ok || link["url"] != "https://ssp.imprezia.ai/track/click?id=abc" {
-		t.Errorf("adm.link.url = %v, want the LinkData.hyperlink", adm["link"])
+	if link, ok := adm["link"].(map[string]interface{}); !ok || link["url"] != "https://go-sandbox.imprezia.ai/go/bEh4zJa_c80YTv2ZjPT2vlJXYKAT_7Q35n9IamNeyWU" {
+		t.Errorf("adm.link.url = %v, want ad.clickUrl", adm["link"])
 	}
 	assets, ok := adm["assets"].([]interface{})
 	if !ok || len(assets) == 0 {
 		t.Fatalf("expected native assets in adm, got %v", adm["assets"])
 	}
 	title := assets[0].(map[string]interface{})["title"].(map[string]interface{})["text"]
-	if title != "Brooks Ghost 16" {
-		t.Errorf("assets[0].title.text = %v, want %q (CardMetadata.Title takes priority)", title, "Brooks Ghost 16")
+	if title != "Developers. Earn money with your AI app." {
+		t.Errorf("assets[0].title.text = %v, want the creative title", title)
+	}
+	impTrackers, ok := adm["imptrackers"].([]interface{})
+	if !ok || len(impTrackers) != 2 {
+		t.Fatalf("expected 2 imptrackers (impression + mrc50), got %v", adm["imptrackers"])
+	}
+	if impTrackers[0] != "https://r-sandbox.imprezia.net/tp/impression-token-abc" {
+		t.Errorf("imptrackers[0] = %v, want the impression tracker", impTrackers[0])
+	}
+	if impTrackers[1] != "https://r-sandbox.imprezia.net/tp/mrc50-token-abc" {
+		t.Errorf("imptrackers[1] = %v, want the mrc50 tracker", impTrackers[1])
 	}
 }
 
