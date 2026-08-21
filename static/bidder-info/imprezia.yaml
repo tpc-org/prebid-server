@@ -1,4 +1,15 @@
 endpoint: "https://api.imprezia.ai/v1/ads/chat"
+# Deployed disabled initially — deliberate, not a placeholder. There's no
+# safe push order between this repo and pbs-settings for a new bidder that
+# requires extra_info: enabling this before pbs-settings has a matching
+# adapters.imprezia key crashes PBS on boot (Builder() errors on the
+# missing key), and pbs-settings pushing that key before this file even
+# exists ALSO crashes PBS ("unknown bidder"). Confirmed live 2026-08-21 (a
+# real, brief, single-region incident during this rollout). Flip to
+# `disabled: false` only in a follow-up deploy, once pbs-settings' pbs.yaml
+# already has a valid adapters.imprezia.extra_info.apiKey live on both
+# regions. See docs/integration/internal-onboarding.md's Imprezia section.
+disabled: true
 maintainer:
   email: "prebid@tpcsrv.com"
 capabilities:
