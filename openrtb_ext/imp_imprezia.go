@@ -9,12 +9,21 @@ package openrtb_ext
 // which their docs state map 1:1 onto the raw REST contract, plus live
 // testing of the endpoint itself.
 //
-// UserID/SessionID/SiteID/PlacementID are genuinely optional per Imprezia's
-// live docs (unlike Gravity, where userId/sessionId are required). Do NOT
-// add these to bidder-params/imprezia.json's "required" list — see that
-// file's own comment for why (this repeats an incident class already hit
-// once with Gravity: PBS rejects the WHOLE imp, not just one bidder, when
-// a multi-bidder stored imp's declared-required field is missing).
+// None of these fields — including Request/Response — are marked
+// "required" in bidder-params/imprezia.json's JSON schema, and neither
+// should they be. Real production incident, 2026-08-22 (learnrithm): an
+// earlier version of this schema required Request/Response reasoning that
+// Imprezia's own API needs them — but that's exactly the field pair that
+// goes missing on any auction fired before an assistant reply exists
+// (page load, or the instant a prompt is submitted). PBS's static schema
+// validation runs before the adapter ever sees the imp, so a "required"
+// field with no value present rejects the WHOLE imp — not just Imprezia's
+// bid, killing Thrad too on that same request. See imprezia.go's package
+// doc for the full incident writeup. Do NOT add Request or Response (or
+// anything else) to that schema's "required" list — MakeRequests already
+// checks for them itself and skips the imp gracefully (soft per-bidder
+// error, no bid) when either is empty, same contract Gravity already has
+// for a missing `messages`.
 type ExtImpImprezia struct {
 	// Dynamic — injected per-auction from window.tpc.data via the client
 	// bundle (prebid-deployments), same convention as Thrad/Gravity's

@@ -38,17 +38,30 @@ package imprezia
 // section for the process to keep this tracking real observed eCPM once
 // traffic exists (same process now also applies to Gravity).
 //
-// ── Required fields ───────────────────────────────────────────────────────
+// ── Required fields — NOT the same thing as PBS schema "required" ─────────
 //
-// Only Request/Response are required by Imprezia's own API — everything
-// else (userId, sessionId, siteId, placementId) is genuinely optional.
-// This is the OPPOSITE of Gravity, where userId/sessionId/placement/
-// placementId are all required — do not copy Gravity's required-field
-// list here. See static/bidder-params/imprezia.json's own comment: this
-// is a deliberate fix for the incident class documented in
-// docs/runbooks/gravity-reactivation.md (PBS rejects the WHOLE imp, not
-// just one bidder, when a multi-bidder stored imp is missing a
-// bidder-params-declared-required field).
+// Request/Response are the only two fields Imprezia's own HTTP API
+// requires — but static/bidder-params/imprezia.json deliberately does NOT
+// mark either as JSON-schema "required" (nothing in this schema is). A
+// real production incident (2026-08-22, learnrithm) is why: they're the
+// dynamic fields, injected per-auction from window.tpc.data.messages once
+// an assistant reply exists — exactly analogous to Gravity's `messages`.
+// Any auction fired before that (page load, or the moment a prompt is
+// submitted but before the reply lands) has no Request/Response to send,
+// same as Gravity legitimately having no `messages` yet. PBS's own static
+// schema validation runs BEFORE this adapter's MakeRequests ever gets a
+// chance to skip gracefully — so declaring these "required" at the schema
+// level meant PBS rejected the WHOLE imp (not just Imprezia's bid,
+// killing Thrad too on that request) every time. An earlier version of
+// this file got this exactly backwards: it required Request/Response
+// (the sometimes-absent dynamic fields) while correctly leaving
+// userId/sessionId/siteId/placementId optional (the always-present
+// static/fallback ones) — the opposite of the safe pattern. The schema
+// now requires nothing; MakeRequests below still checks for a non-empty
+// Request/Response itself and skips the imp with a soft per-bidder error
+// (no bid, no hard failure) when either is missing — same graceful-skip
+// contract Gravity already has for `messages`. Do NOT re-add request or
+// response to static/bidder-params/imprezia.json's schema.
 //
 // ── Response shape: confirmed live against sandbox 2026-08-21 ─────────────
 //

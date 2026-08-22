@@ -37,6 +37,5 @@
       "type": "number",
       "description": "Overrides global extra_info.bidPrice when set — Imprezia returns no price"
     }
-  },
-  "required": ["request", "response"]
+  }
 }
