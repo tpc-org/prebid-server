@@ -12,6 +12,28 @@
       "type": "string",
       "description": "The AI-generated response text to monetize"
     },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO-8601 instant the chat turn completed (not when the request was sent). Required by Imprezia's own API but never JSON-schema-required here — dynamic per-auction field, same rule as request/response (see imprezia.go's package doc)."
+    },
+    "deviceContext": {
+      "type": "object",
+      "description": "The end user's viewport/device shape. Required by Imprezia's own API but never JSON-schema-required here — dynamic per-auction field, same rule as request/response.",
+      "properties": {
+        "deviceType": {
+          "type": "string",
+          "enum": ["desktop", "mobile", "tablet"]
+        },
+        "viewportWidth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "viewportHeight": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
     "userId": {
       "type": "string",
       "description": "Optional tracking/personalization identifier"

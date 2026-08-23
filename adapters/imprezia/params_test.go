@@ -54,8 +54,14 @@ func TestInvalidParams(t *testing.T) {
 var validParams = []string{
 	// Full shape: static half (from the Stored Imp) merged with the
 	// dynamic half (from the bundle) — the normal steady-state request
-	// once an assistant reply exists.
-	`{"request":"What are some good running shoes?","response":"I recommend cushioned neutral shoes for beginners.","userId":"u1","sessionId":"s1","siteId":"cbc68717-3d85-4d55-9a29-e7a1a22ab4ef","placementId":"sayhola-chat-main","maxCards":1,"bidPrice":1.5}`,
+	// once an assistant reply exists. Includes timestamp/deviceContext,
+	// added 2026-08-23 alongside request/response/sessionId.
+	`{"request":"What are some good running shoes?","response":"I recommend cushioned neutral shoes for beginners.","timestamp":"2026-08-23T17:41:57.000Z","deviceContext":{"deviceType":"mobile","viewportWidth":390,"viewportHeight":844},"userId":"u1","sessionId":"s1","siteId":"cbc68717-3d85-4d55-9a29-e7a1a22ab4ef","placementId":"sayhola-chat-main","maxCards":1,"bidPrice":1.5}`,
+	// Same steady-state shape but missing timestamp/deviceContext — must
+	// still validate cleanly (2026-08-23 regression case, same incident
+	// class as the request/response case below): MakeRequests, not the
+	// schema, decides whether to skip.
+	`{"request":"What are some good running shoes?","response":"I recommend cushioned neutral shoes for beginners.","siteId":"cbc68717-3d85-4d55-9a29-e7a1a22ab4ef","placementId":"sayhola-chat-main"}`,
 	// Stored-Imp-only static shape — no request/response yet. THE
 	// regression case: this is exactly what PBS validates on every
 	// auction fired before an assistant reply exists, and it must pass.
@@ -75,6 +81,10 @@ var invalidParams = []string{
 	`{"request":123,"response":"hi"}`,
 	// Wrong type for a static field.
 	`{"siteId":42}`,
+	// Malformed deviceContext — wrong type for a nested field.
+	`{"deviceContext":{"deviceType":"mobile","viewportWidth":"wide"}}`,
+	// deviceContext.deviceType outside the enum.
+	`{"deviceContext":{"deviceType":"smart-fridge"}}`,
 	// Wrong type for maxCards.
 	`{"maxCards":"one"}`,
 	// maxCards below the schema's minimum.

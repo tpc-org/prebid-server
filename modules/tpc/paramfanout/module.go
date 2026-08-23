@@ -212,6 +212,21 @@ func fanOutThrad(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage
 // placeholder — never empty, per Imprezia's own API rejecting `""`
 // outright — see imp_imprezia.go's package doc), SessionID is required by
 // Imprezia's real API even though our own schema marks it optional.
+//
+// KNOWN GAP (2026-08-23): imprezia.go's MakeRequests now also requires
+// Timestamp and DeviceContext (added the same day, after Imprezia
+// reported both missing from real traffic — see imp_imprezia.go's package
+// doc) and soft-skips Imprezia when either is absent. Neither is filled
+// in here — tpcGenericParams has no concept of either field today. A
+// server-side/mobile integration relying solely on this module's fan-out
+// (rather than sending fully-populated bidder ext itself) will silently
+// get zero Imprezia bids until this is addressed — either by extending
+// the generic block's schema with an optional deviceContext (Timestamp
+// could reasonably default to time.Now() at fan-out time, but
+// DeviceContext has no server-side source of truth) or by leaving it as
+// documented caller responsibility. Not fixed here: this module has no
+// confirmed real traffic yet (see package doc), same status as the
+// Mobile SDK integration path itself.
 func fanOutImprezia(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage, bool) {
 	var imprezia openrtb_ext.ExtImpImprezia
 	if err := json.Unmarshal(raw, &imprezia); err != nil {
