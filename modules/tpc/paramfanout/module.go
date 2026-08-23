@@ -37,6 +37,7 @@ package paramfanout
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/prebid/prebid-server/v4/hooks/hookstage"
 	"github.com/prebid/prebid-server/v4/modules/moduledeps"
@@ -66,6 +67,19 @@ type tpcGenericParams struct {
 	ChatID      string       `json:"chatId,omitempty"`
 	HashedEmail string       `json:"hashedEmail,omitempty"`
 	Messages    []tpcMessage `json:"messages,omitempty"`
+
+	// DeviceContext is optional and Imprezia-specific — added 2026-08-23
+	// alongside Timestamp below. A caller that knows the end user's real
+	// viewport/device shape (a Mobile SDK app reading its own OS's screen
+	// metrics, for instance) can supply it here; fanOutImprezia passes it
+	// through unchanged. There is no server-side source of truth for this
+	// field, so it is never fabricated — a caller that omits it leaves
+	// Imprezia's own DeviceContext unset, and imprezia.go's existing
+	// graceful-skip check (same contract as Request/Response) simply
+	// no-bids Imprezia for that imp rather than sending it a guessed
+	// value that could misrepresent the actual device (a bad guess is
+	// worse than a skip here, unlike Timestamp below).
+	DeviceContext *openrtb_ext.ExtImpImpreziaDeviceContext `json:"deviceContext,omitempty"`
 }
 
 type tpcMessage struct {
@@ -205,28 +219,28 @@ func fanOutThrad(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage
 	return merged, true
 }
 
-// fanOutImprezia fills in Imprezia's dynamic Request/Response/SessionID
-// from the generic block's messages/sessionId, matching the mapping
+// fanOutImprezia fills in Imprezia's dynamic Request/Response/SessionID/
+// Timestamp/DeviceContext from the generic block, matching the mapping
 // already verified live for the web bundle: Request is the latest user
 // turn, Response is the latest assistant turn (or a single-space
 // placeholder — never empty, per Imprezia's own API rejecting `""`
 // outright — see imp_imprezia.go's package doc), SessionID is required by
 // Imprezia's real API even though our own schema marks it optional.
 //
-// KNOWN GAP (2026-08-23): imprezia.go's MakeRequests now also requires
-// Timestamp and DeviceContext (added the same day, after Imprezia
-// reported both missing from real traffic — see imp_imprezia.go's package
-// doc) and soft-skips Imprezia when either is absent. Neither is filled
-// in here — tpcGenericParams has no concept of either field today. A
-// server-side/mobile integration relying solely on this module's fan-out
-// (rather than sending fully-populated bidder ext itself) will silently
-// get zero Imprezia bids until this is addressed — either by extending
-// the generic block's schema with an optional deviceContext (Timestamp
-// could reasonably default to time.Now() at fan-out time, but
-// DeviceContext has no server-side source of truth) or by leaving it as
-// documented caller responsibility. Not fixed here: this module has no
-// confirmed real traffic yet (see package doc), same status as the
-// Mobile SDK integration path itself.
+// Timestamp/DeviceContext added 2026-08-23, closing the gap this
+// function's doc used to flag: imprezia.go's MakeRequests requires both
+// (added the same day, after Imprezia reported them missing from real
+// traffic) and soft-skips Imprezia when either is absent. Timestamp is
+// always safe to synthesize here — time.Now() at fan-out time is a
+// reasonable proxy for "when the turn completed," the same imprecision
+// already accepted by the hand-built server-side integration samples.
+// DeviceContext has no server-side source of truth, so it is only ever
+// passed through from tpcGenericParams.DeviceContext when the caller
+// actually supplies it — never fabricated, since a wrong guess (e.g.
+// always "desktop" for what might be a Mobile SDK caller) would
+// misrepresent the real device to Imprezia's targeting. A caller that
+// omits DeviceContext simply gets Imprezia soft-skipped for that imp,
+// same graceful-skip contract as every other missing dynamic field.
 func fanOutImprezia(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage, bool) {
 	var imprezia openrtb_ext.ExtImpImprezia
 	if err := json.Unmarshal(raw, &imprezia); err != nil {
@@ -250,6 +264,18 @@ func fanOutImprezia(raw json.RawMessage, generic tpcGenericParams) (json.RawMess
 	}
 	if imprezia.SessionID == "" && generic.SessionID != "" {
 		imprezia.SessionID = generic.SessionID
+		changed = true
+	}
+	// Gated on a non-empty Request (not just "always stamp a timestamp") —
+	// no point synthesizing one for an imp that's going to be soft-skipped
+	// on Request anyway (e.g. a Stored Imp with an imprezia key but no
+	// messages in this generic block at all).
+	if imprezia.Timestamp == "" && imprezia.Request != "" {
+		imprezia.Timestamp = time.Now().UTC().Format(time.RFC3339)
+		changed = true
+	}
+	if imprezia.DeviceContext == nil && generic.DeviceContext != nil {
+		imprezia.DeviceContext = generic.DeviceContext
 		changed = true
 	}
 

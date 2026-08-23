@@ -90,6 +90,49 @@ func TestFanOutThradAndImprezia(t *testing.T) {
 	assert.Equal(t, " ", imprezia["response"], "no assistant turn yet -> single-space placeholder, never empty")
 	assert.Equal(t, "session-1", imprezia["sessionId"])
 	assert.Equal(t, "cbc68717-3d85-4d55-9a29-e7a1a22ab4ef", imprezia["siteId"], "static field must survive untouched")
+	assert.NotEmpty(t, imprezia["timestamp"], "synthesized once a real Request exists — see fanOutImprezia's 2026-08-23 addendum")
+	assert.Nil(t, imprezia["deviceContext"], "never fabricated — generic block supplied none")
+}
+
+// TestFanOutImpreziaPassesThroughDeviceContext confirms DeviceContext is
+// only ever passed through verbatim from the generic block, never guessed
+// — no server-side source of truth for it exists (see fanOutImprezia's doc).
+func TestFanOutImpreziaPassesThroughDeviceContext(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc": mustJSON(t, map[string]interface{}{
+			"messages": []map[string]string{
+				{"role": "user", "content": "I'm looking for new shoes"},
+			},
+			"deviceContext": map[string]interface{}{
+				"deviceType": "mobile", "viewportWidth": 390, "viewportHeight": 844,
+			},
+		}),
+		"imprezia": mustJSON(t, map[string]interface{}{"siteId": "s1"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	imprezia := bidderExt(t, rw, "imprezia")
+	dc, ok := imprezia["deviceContext"].(map[string]interface{})
+	require.True(t, ok, "deviceContext should be passed through, got %v", imprezia["deviceContext"])
+	assert.Equal(t, "mobile", dc["deviceType"])
+	assert.Equal(t, float64(390), dc["viewportWidth"])
+}
+
+// TestFanOutImpreziaNoTimestampWithoutRequest confirms Timestamp is only
+// synthesized when there's an actual Request to send — no point stamping
+// a timestamp on an imp that's going to be soft-skipped on Request anyway.
+func TestFanOutImpreziaNoTimestampWithoutRequest(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc":      mustJSON(t, map[string]interface{}{"userId": "user-1"}), // no messages
+		"imprezia": mustJSON(t, map[string]interface{}{"siteId": "s1"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	imprezia := bidderExt(t, rw, "imprezia")
+	assert.Empty(t, imprezia["timestamp"])
+	assert.Empty(t, imprezia["request"])
 }
 
 func TestFanOutImpreziaUsesRealAssistantReply(t *testing.T) {
