@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "AdSense Adapter Params",
+  "description": "A schema which validates params accepted by the AdSense adapter",
+  "type": "object",
+  "properties": {
+    "bidPrice": {
+      "type": "number",
+      "description": "Overrides global extra_info.bidPrice when set — AdSense makes no real per-auction call to Google and so has no price of its own; see adapters/adsense/adsense.go's package doc"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# Google AdSense — a SYNTHETIC bidder, unlike every other adapter here.
+# It makes no real call to Google; `endpoint` below MUST be a local
+# loopback URL (e.g. http://127.0.0.1:8000/status), never a real Google
+# endpoint. Full rationale: adapters/adsense/adsense.go's package doc and
+# docs/integration/adsense-integration-plan.md (tpc-org/docs).
+#
+# Follow the same safe 3-step rollout order documented on imprezia.yaml
+# (deploy disabled -> deploy pbs-settings' adapters.adsense config ->
+# deploy enabled) before flipping `disabled` below — exchange.BuildAdapters()
+# calls Builder() for every enabled bidder at PBS boot regardless of
+# whether any Stored Imp references it, so a bad/missing endpoint config
+# would crash PBS startup on both regions at once.
+disabled: true
+endpoint: "http://127.0.0.1:8000/status"
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - banner
+      - native
+  app:
+    mediaTypes:
+      - banner
+      - native
