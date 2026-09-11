@@ -4,13 +4,17 @@
 # endpoint. Full rationale: adapters/adsense/adsense.go's package doc and
 # docs/integration/adsense-integration-plan.md (tpc-org/docs).
 #
-# Follow the same safe 3-step rollout order documented on imprezia.yaml
-# (deploy disabled -> deploy pbs-settings' adapters.adsense config ->
-# deploy enabled) before flipping `disabled` below — exchange.BuildAdapters()
-# calls Builder() for every enabled bidder at PBS boot regardless of
-# whether any Stored Imp references it, so a bad/missing endpoint config
-# would crash PBS startup on both regions at once.
-disabled: true
+# Step 3 of the safe 3-step rollout (deploy disabled -> deploy
+# pbs-settings' adapters.adsense config -> deploy enabled, same pattern
+# imprezia.yaml used) — pbs-settings' adapters.adsense block has been
+# live and healthy on both regions since that deploy. Enabling here does
+# NOT make AdSense live in any real auction: no Stored Imp references
+# "adsense" yet except the two isolated sole-bidder test Stored Imps
+# under sayhola (sayhola-1fe45775, sayhola-d8e1965b — see
+# docs/integration/adsense-integration-plan.md's "Phase 3/4 — isolated
+# test placement"). This just lets Builder() run successfully instead of
+# skipping, and lets those two test Stored Imps actually produce a bid.
+disabled: false
 endpoint: "http://127.0.0.1:8000/status"
 maintainer:
   email: "prebid@tpcsrv.com"
