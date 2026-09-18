@@ -246,6 +246,7 @@ import (
 	"github.com/prebid/prebid-server/v4/adapters/thetradedesk"
 	"github.com/prebid/prebid-server/v4/adapters/thrad"
 	"github.com/prebid/prebid-server/v4/adapters/tpc"
+	"github.com/prebid/prebid-server/v4/adapters/tpctest"
 	"github.com/prebid/prebid-server/v4/adapters/tpmn"
 	"github.com/prebid/prebid-server/v4/adapters/tradplus"
 	"github.com/prebid/prebid-server/v4/adapters/trafficgate"
@@ -532,6 +533,7 @@ func newAdapterBuilders() map[openrtb_ext.BidderName]adapters.Builder {
 		openrtb_ext.BidderTheTradeDesk:      thetradedesk.Builder,
 		openrtb_ext.BidderThrad:             thrad.Builder,
 		openrtb_ext.BidderTpc:               tpc.Builder,
+		openrtb_ext.BidderTpcTest:           tpctest.Builder,
 		openrtb_ext.BidderTpmn:              tpmn.Builder,
 		openrtb_ext.BidderTradPlus:          tradplus.Builder,
 		openrtb_ext.BidderTrafficGate:       trafficgate.Builder,
