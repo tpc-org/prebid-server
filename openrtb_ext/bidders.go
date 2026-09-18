@@ -264,6 +264,7 @@ var coreBidderNames []BidderName = []BidderName{
 	BidderTheTradeDesk,
 	BidderThrad,
 	BidderTpc,
+	BidderTpcTest,
 	BidderTpmn,
 	BidderTradPlus,
 	BidderTrafficGate,
@@ -654,6 +655,7 @@ const (
 	BidderTheTradeDesk      BidderName = "thetradedesk"
 	BidderThrad             BidderName = "thrad"
 	BidderTpc               BidderName = "tpc"
+	BidderTpcTest           BidderName = "tpctest"
 	BidderTpmn              BidderName = "tpmn"
 	BidderTradPlus          BidderName = "tradplus"
 	BidderTrafficGate       BidderName = "trafficgate"

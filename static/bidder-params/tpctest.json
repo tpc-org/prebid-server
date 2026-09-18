@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "TPC Test Adapter Params",
+  "description": "A schema which validates params accepted by the tpctest deterministic test bidder — see docs/integration/test-bidder-plan.md and adapters/tpctest/tpctest.go's package doc",
+  "type": "object",
+  "properties": {
+    "bidPrice": {
+      "type": "number",
+      "description": "Overrides the adapter's own default fixed CPM. tpctest never makes a real per-auction call and so has no price of its own; see adapters/tpctest/tpctest.go's package doc"
+    }
+  }
+}

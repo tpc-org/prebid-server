@@ -1,0 +1,31 @@
+# tpctest — a deterministic, SYNTHETIC test bidder, not a real demand
+# source. Used only so a server-side integration partner (e.g. Inline)
+# can validate their end-to-end pipeline without depending on real
+# demand-partner economics. Full rationale:
+# docs/integration/test-bidder-plan.md (tpc-org/docs) and
+# adapters/tpctest/tpctest.go's package doc.
+#
+# `endpoint` MUST be a local loopback URL (e.g.
+# http://127.0.0.1:8000/status), never a real external endpoint — same
+# convention as adsense.yaml. This bidder makes no outbound call.
+#
+# Phase 1 of the rollout plan: disabled: true, as below. Flipping this
+# to false is its own later, explicit step — see
+# docs/integration/test-bidder-plan.md's phased rollout. Even once
+# enabled, this bidder refuses to bid at all unless the request is
+# OpenRTB test-flagged (request.Test == 1) — see
+# adapters/tpctest/tpctest.go's MakeRequests — so enabling it here does
+# not make it live on any real (non-test-flagged) traffic.
+disabled: true
+endpoint: "http://127.0.0.1:8000/status"
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - banner
+      - native
+  app:
+    mediaTypes:
+      - banner
+      - native
