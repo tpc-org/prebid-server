@@ -121,6 +121,19 @@ func (m Module) HandleProcessedAuctionHook(
 	if !m.cfg.Enabled || payload.Request == nil {
 		return result, nil
 	}
+	if payload.Request.Test == 1 {
+		// OpenRTB test-flagged traffic (e.g. adapters/tpctest verification
+		// requests, merged onto a real Stored Imp) never gets logged here,
+		// regardless of which Stored Imp it's merged onto — prevents it
+		// from polluting real "Requests"/"Bid Req" dashboard KPIs, the same
+		// class of bug as the 2026-09-08 shadow-ingestion double-count
+		// incident. Returning here with no ModuleContext also makes
+		// HandleAuctionResponseHook a clean no-op for this request (see its
+		// "no stashed data" branch below), so this one check suppresses
+		// both stages. See adapters/tpctest/tpctest.go's package doc and
+		// docs/integration/test-bidder-plan.md.
+		return result, nil
+	}
 
 	debugActive := m.isDebugActive()
 
