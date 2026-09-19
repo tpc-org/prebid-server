@@ -237,6 +237,36 @@ func TestDisabledModuleWritesNothing(t *testing.T) {
 	assert.Empty(t, readLines(t, dir, "activity"))
 }
 
+// TestFlaggedRequestWritesNothing is the regression guard for the fix
+// documented in docs/integration/test-bidder-plan.md's "Known gaps": before
+// this, test:1 traffic (e.g. adapters/tpctest verification requests) merged
+// onto a real Stored Imp got logged and counted the same as real traffic,
+// double-counting into that placement's "Requests"/"Bid Req" dashboard KPIs.
+func TestFlaggedRequestWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	module := buildModule(t, dir, "")
+
+	payload := hookstage.ProcessedAuctionRequestPayload{
+		Request: &openrtb_ext.RequestWrapper{
+			BidRequest: &openrtb2.BidRequest{
+				ID:   "test-flagged-auction",
+				Test: 1,
+				Imp:  []openrtb2.Imp{impWithBidders("imp1", "sayhola-9243e9b6", "thrad", "tpctest")},
+			},
+		},
+	}
+	result, err := module.HandleProcessedAuctionHook(context.Background(), hookstage.ModuleInvocationContext{}, payload)
+	require.NoError(t, err)
+	assert.Nil(t, result.ModuleContext)
+
+	processResponse(t, module, result.ModuleContext, &openrtb2.BidResponse{
+		SeatBid: []openrtb2.SeatBid{seatBid("tpctest", "imp1")},
+	})
+
+	assert.Empty(t, readLines(t, dir, "activity"))
+	assert.Empty(t, readLines(t, dir, "debug"))
+}
+
 func TestDebugFlagAbsentNeverWritesDebugLog(t *testing.T) {
 	dir := t.TempDir()
 	module := buildModule(t, dir, filepath.Join(dir, "DEBUG_FULL_LOGGING")) // never created
