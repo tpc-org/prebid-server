@@ -9,14 +9,17 @@
 # http://127.0.0.1:8000/status), never a real external endpoint — same
 # convention as adsense.yaml. This bidder makes no outbound call.
 #
-# Phase 1 of the rollout plan: disabled: true, as below. Flipping this
-# to false is its own later, explicit step — see
-# docs/integration/test-bidder-plan.md's phased rollout. Even once
-# enabled, this bidder refuses to bid at all unless the request is
-# OpenRTB test-flagged (request.Test == 1) — see
-# adapters/tpctest/tpctest.go's MakeRequests — so enabling it here does
-# not make it live on any real (non-test-flagged) traffic.
-disabled: true
+# Step 3 of the safe 3-step rollout (docs/integration/test-bidder-plan.md):
+# prebid-server#9 shipped this file with disabled: true, pbs-settings#22
+# landed the adapters.tpctest config block (confirmed live on both
+# regions), and this commit is the final step — flipping disabled to
+# false. This makes Builder() actually run at PBS boot, but does NOT
+# make tpctest live on any real traffic: it refuses to bid at all
+# unless the request is OpenRTB test-flagged (request.Test == 1) — see
+# adapters/tpctest/tpctest.go's MakeRequests. Only a caller explicitly
+# opting in with "test": 1 + imp.ext.prebid.bidder.tpctest can ever get
+# a bid from this bidder.
+disabled: false
 endpoint: "http://127.0.0.1:8000/status"
 maintainer:
   email: "prebid@tpcsrv.com"
