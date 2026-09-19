@@ -27,7 +27,21 @@ RUN go mod tidy
 RUN go mod vendor
 ARG TEST="true"
 RUN if [ "$TEST" != "false" ]; then ./validate.sh ; fi
-RUN go build -mod=vendor -ldflags "-X github.com/prebid/prebid-server/v4/version.Ver=`git describe --tags | sed 's/^v//'` -X github.com/prebid/prebid-server/v4/version.Rev=`git rev-parse HEAD`" .
+
+# VERSION/REVISION are computed by the caller (deploy.sh, in the pbs-settings
+# repo) from the already-checked-out source *outside* this build, and passed
+# in as --build-arg — not shelled out to git inside this RUN step. That used
+# to run `git describe --tags`/`git rev-parse HEAD` directly here, which
+# depends on .git surviving intact into the Docker build context; on this
+# fork's deploy hosts that's been unreliable (git commands failing outright
+# on one region, silently resolving to a stale/wrong commit on the other —
+# see docs/integration/test-bidder-plan.md's "Known gaps" for the
+# investigation). Defaults to empty strings so a plain `docker build` with no
+# build-args (e.g. a local dev build) still succeeds, just without embedded
+# version info.
+ARG VERSION=""
+ARG REVISION=""
+RUN go build -mod=vendor -ldflags "-X github.com/prebid/prebid-server/v4/version.Ver=${VERSION} -X github.com/prebid/prebid-server/v4/version.Rev=${REVISION}" .
 
 FROM ${BASE_IMAGE} AS release
 LABEL maintainer="hans.hjort@xandr.com" 
