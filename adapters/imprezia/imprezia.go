@@ -29,14 +29,22 @@ package imprezia
 // with 400 "Invalid publisher hierarchy" (confirmed live). Don't test a
 // real siteId against the sandbox host expecting it to work.
 //
-// ── No price field ───────────────────────────────────────────────────────
+// ── Price field ───────────────────────────────────────────────────────────
 //
-// Same gap as Gravity: Imprezia's response has no price/CPM anywhere.
-// extra_info.bidPrice is the CPM (USD) reported to PBS, default 1.0 if
-// omitted — overridable per-imp via ExtImpImprezia.BidPrice. See
-// docs/integration/internal-onboarding.md's "Bid price calibration"
-// section for the process to keep this tracking real observed eCPM once
-// traffic exists (same process now also applies to Gravity).
+// Imprezia added `ad.bidPrice`/`ad.bidCurrency` to the response 2026-09-21
+// (confirmed live, their own account team enabled it after being asked —
+// see docs/integration/internal-onboarding.md's Imprezia section). When
+// present, this is now the real CPM used for the bid — the eCPM-calibration
+// automation (dashboard's update_bid_prices) was stopped for Imprezia the
+// same day, since a hand-maintained/auto-calibrated fallback no longer
+// needs to track reality once the partner reports its own price.
+//
+// extra_info.bidPrice / ExtImpImprezia.BidPrice remain as a defensive
+// fallback ONLY — used when a response omits ad.bidPrice (a house/fixed-
+// price ad, a publisher not yet enabled for this field, or a future
+// response shape regression), so a temporary gap in Imprezia's own pricing
+// never turns into a silent $0 bid. Same gap Gravity still has entirely
+// (no price field of its own at all) — that fallback path is unchanged.
 //
 // ── Required fields — NOT the same thing as PBS schema "required" ─────────
 //
@@ -229,10 +237,12 @@ type chatAdsResponse struct {
 }
 
 type ad struct {
-	Creative   creative   `json:"creative"`
-	ClickURL   string     `json:"clickUrl"`
-	Trackers   trackers   `json:"trackers"`
-	Impression impression `json:"impression"`
+	Creative    creative   `json:"creative"`
+	ClickURL    string     `json:"clickUrl"`
+	Trackers    trackers   `json:"trackers"`
+	Impression  impression `json:"impression"`
+	BidPrice    *float64   `json:"bidPrice,omitempty"`
+	BidCurrency string     `json:"bidCurrency,omitempty"`
 }
 
 type creative struct {
@@ -474,6 +484,11 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 
 	imp := request.Imp[0]
 
+	// Fallback chain, lowest to highest precedence: extra_info default,
+	// then a per-imp Stored Imp override, then — added 2026-09-21 — the
+	// real price Imprezia's own response now carries. See the package
+	// doc's "Price field" section for why the first two remain as a
+	// defensive fallback rather than being removed.
 	bidPrice := a.info.BidPrice
 	var bidderExt adapters.ExtImpBidder
 	var impExt openrtb_ext.ExtImpImprezia
@@ -482,6 +497,14 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 			if impExt.BidPrice > 0 {
 				bidPrice = impExt.BidPrice
 			}
+		}
+	}
+
+	currency := "USD"
+	if chatResp.Ad.BidPrice != nil && *chatResp.Ad.BidPrice > 0 {
+		bidPrice = *chatResp.Ad.BidPrice
+		if chatResp.Ad.BidCurrency != "" {
+			currency = chatResp.Ad.BidCurrency
 		}
 	}
 
@@ -525,7 +548,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		Bid:     &ortbBid,
 		BidType: openrtb_ext.BidTypeNative,
 	})
-	bidderResponse.Currency = "USD"
+	bidderResponse.Currency = currency
 
 	return bidderResponse, nil
 }

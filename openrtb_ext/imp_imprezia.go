@@ -70,8 +70,12 @@ type ExtImpImprezia struct {
 	// imp) — see imprezia.go.
 	MaxCards *int `json:"maxCards,omitempty"`
 
-	// BidPrice overrides the global extra_info.bidPrice fallback — Imprezia
-	// returns no price field in its response, same gap as Gravity.
+	// BidPrice overrides the global extra_info.bidPrice fallback. Imprezia
+	// started returning its own ad.bidPrice/bidCurrency 2026-09-21, which
+	// now takes precedence over this when present — see imprezia.go's
+	// package doc "Price field" section. This field (and the extra_info
+	// default) remain only as a defensive fallback for a response that
+	// omits it.
 	BidPrice float64 `json:"bidPrice,omitempty"`
 }
 

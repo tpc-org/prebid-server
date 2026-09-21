@@ -460,6 +460,64 @@ func TestMakeBidsBeaconBaseURLIsSandboxWhenTest1(t *testing.T) {
 	}
 }
 
+// TestMakeBidsUsesRealBidPriceWhenPresent confirms ad.bidPrice/bidCurrency
+// (added by Imprezia 2026-09-21) take precedence over both the
+// extra_info.bidPrice default and any per-imp BidPrice override — see the
+// package doc's "Price field" section. The fallback fixture
+// (TestMakeBidsParsesRealSandboxResponse) predates this field and is kept
+// as-is to prove the fallback chain still works when it's absent.
+func TestMakeBidsUsesRealBidPriceWhenPresent(t *testing.T) {
+	bidder := testBuilder(t)
+	imp := impreziaImp(t, baseImpreziaExt(map[string]interface{}{"bidPrice": 5.0}))
+	request := &openrtb2.BidRequest{ID: "req-1", Imp: []openrtb2.Imp{imp}}
+
+	body := `{
+		"requestId": "req_1", "siteId": "s", "placementId": null,
+		"ad": {
+			"creative": {"title": "t"},
+			"clickUrl": "https://go.imprezia.ai/go/x",
+			"trackers": {}, "impression": {},
+			"bidPrice": 14.7, "bidCurrency": "USD"
+		}
+	}`
+	response := &adapters.ResponseData{StatusCode: http.StatusOK, Body: []byte(body)}
+
+	bidderResponse, errs := bidder.MakeBids(request, nil, response)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if bidderResponse.Bids[0].Bid.Price != 14.7 {
+		t.Errorf("Price = %v, want the real ad.bidPrice 14.7 (overriding both fallbacks)", bidderResponse.Bids[0].Bid.Price)
+	}
+	if bidderResponse.Currency != "USD" {
+		t.Errorf("Currency = %v, want ad.bidCurrency USD", bidderResponse.Currency)
+	}
+}
+
+// TestMakeBidsFallsBackToConfiguredPriceWhenAdBidPriceAbsent locks in that
+// a response with no bidPrice (house ad, not-yet-enabled publisher, or any
+// future regression) still uses the existing extra_info/per-imp fallback
+// chain rather than bidding $0.
+func TestMakeBidsFallsBackToConfiguredPriceWhenAdBidPriceAbsent(t *testing.T) {
+	bidder := testBuilder(t)
+	imp := impreziaImp(t, baseImpreziaExt(map[string]interface{}{"bidPrice": 5.0}))
+	request := &openrtb2.BidRequest{ID: "req-1", Imp: []openrtb2.Imp{imp}}
+
+	body := `{"requestId":"req_1","siteId":"s","placementId":null,"ad":{"creative":{"title":"t"},"clickUrl":"https://go.imprezia.ai/go/x","trackers":{},"impression":{}}}`
+	response := &adapters.ResponseData{StatusCode: http.StatusOK, Body: []byte(body)}
+
+	bidderResponse, errs := bidder.MakeBids(request, nil, response)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if bidderResponse.Bids[0].Bid.Price != 5.0 {
+		t.Errorf("Price = %v, want the per-imp fallback 5.0 (ad.bidPrice absent)", bidderResponse.Bids[0].Bid.Price)
+	}
+	if bidderResponse.Currency != "USD" {
+		t.Errorf("Currency = %v, want default USD when ad.bidCurrency absent", bidderResponse.Currency)
+	}
+}
+
 // TestMakeBidsBadRequestReturnsError mirrors Gravity's 400 handling.
 func TestMakeBidsBadRequestReturnsError(t *testing.T) {
 	bidder := testBuilder(t)
