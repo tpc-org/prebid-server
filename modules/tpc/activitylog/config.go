@@ -18,12 +18,15 @@ import (
 // whether to also write the sensitive debug log for that request — see
 // module.go's isDebugActive. DebugWindowHours is how recently that flag
 // file must have been touched to count as active; 0 means "unset", which
-// newConfig defaults to 4.
+// newConfig defaults to 4. GeoDBPath is an optional MaxMind
+// GeoLite2-Country .mmdb file used to stamp each activity line with a
+// country code — see geo.go; empty or missing means no country.
 type config struct {
 	Enabled          bool   `json:"enabled"`
 	LogDir           string `json:"log_dir"`
 	DebugFlagFile    string `json:"debug_flag_file"`
 	DebugWindowHours int    `json:"debug_window_hours"`
+	GeoDBPath        string `json:"geo_db_path"`
 }
 
 const defaultDebugWindowHours = 4
