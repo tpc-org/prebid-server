@@ -34,8 +34,8 @@
 // ── Two output files, by design ───────────────────────────────────────────
 //
 // activity.log-YYYYMMDD: always written, one line per auction. Contains
-// only stored_imp_id + per-bidder requested/bid counts — no message
-// content, no IPs. This is the sole data source for both the ad-request-
+// only stored_imp_id + per-bidder requested/bid counts, plus the auction's
+// resolved country code (geo.go) — no message content, no IPs. This is the sole data source for both the ad-request-
 // count and bid-stats ingestion pipelines (pbs-settings' ingest_activity.py).
 //
 // debug.log-YYYYMMDD: written only when a staff-controlled flag file is
@@ -80,11 +80,20 @@ func Builder(cfg json.RawMessage, _ moduledeps.ModuleDeps) (interface{}, error) 
 	if c.Enabled && c.LogDir == "" {
 		return nil, fmt.Errorf("activitylog: log_dir is required when enabled")
 	}
-	return Module{cfg: c}, nil
+	m := Module{cfg: c}
+	if c.Enabled {
+		if db := newGeoDB(c.GeoDBPath); db != nil {
+			m.geo = db
+		}
+	}
+	return m, nil
 }
 
 type Module struct {
 	cfg config
+	// geo resolves device IPs to a country code — nil when no geo_db_path
+	// is configured (see geo.go).
+	geo countryLookup
 }
 
 // ── Per-imp data stashed between stages ────────────────────────────────────
@@ -106,6 +115,7 @@ type impActivity struct {
 
 type stashedActivity struct {
 	Imps          map[string]impActivity // keyed by imp.ID
+	Country       string                 // ISO-3166 alpha-2, "" if unresolved — see geo.go
 	DebugActive   bool
 	DebugDeviceIP string
 }
@@ -180,7 +190,11 @@ func (m Module) HandleProcessedAuctionHook(
 		return result, nil
 	}
 
-	stashed := stashedActivity{Imps: imps, DebugActive: debugActive}
+	stashed := stashedActivity{
+		Imps:        imps,
+		Country:     resolveCountry(m.geo, payload.Request.Device),
+		DebugActive: debugActive,
+	}
 	if debugActive && payload.Request.Device != nil {
 		if payload.Request.Device.IP != "" {
 			stashed.DebugDeviceIP = payload.Request.Device.IP
@@ -241,6 +255,7 @@ type activityBidder struct {
 
 type activityLine struct {
 	Timestamp string            `json:"ts"`
+	Country   string            `json:"country,omitempty"`
 	Imps      []activityImpLine `json:"imps"`
 }
 
@@ -263,7 +278,7 @@ func bidCountsByImpAndSeat(resp *openrtb2.BidResponse) map[string]map[string]int
 func (m Module) writeActivityLine(stashed stashedActivity, resp *openrtb2.BidResponse) {
 	bidCounts := bidCountsByImpAndSeat(resp)
 
-	line := activityLine{Timestamp: time.Now().UTC().Format(time.RFC3339)}
+	line := activityLine{Timestamp: time.Now().UTC().Format(time.RFC3339), Country: stashed.Country}
 	for _, activity := range stashed.Imps {
 		if activity.StoredImpID == "" {
 			continue
