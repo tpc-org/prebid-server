@@ -201,14 +201,15 @@ func bannerBidderResponse(imp *openrtb2.Imp, bidPrice float64) (*adapters.Bidder
 	w, h := bannerSize(imp.Banner)
 
 	ortbBid := openrtb2.Bid{
-		ID:    imp.ID,
-		ImpID: imp.ID,
-		Price: bidPrice,
-		AdM:   bannerCreativeHTML(w, h),
-		W:     w,
-		H:     h,
-		CrID:  adCreativeID,
-		MType: openrtb2.MarkupBanner,
+		ID:      imp.ID,
+		ImpID:   imp.ID,
+		Price:   bidPrice,
+		ADomain: []string{"magneta.app"},
+		AdM:     bannerCreativeHTML(w, h),
+		W:       w,
+		H:       h,
+		CrID:    adCreativeID,
+		MType:   openrtb2.MarkupBanner,
 	}
 
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(1)
@@ -230,12 +231,13 @@ func nativeBidderResponse(imp *openrtb2.Imp, bidPrice float64) (*adapters.Bidder
 	}
 
 	ortbBid := openrtb2.Bid{
-		ID:    imp.ID,
-		ImpID: imp.ID,
-		Price: bidPrice,
-		AdM:   nativeAdm,
-		CrID:  adCreativeID,
-		MType: openrtb2.MarkupNative,
+		ID:      imp.ID,
+		ImpID:   imp.ID,
+		Price:   bidPrice,
+		ADomain: []string{"magneta.app"},
+		AdM:     nativeAdm,
+		CrID:    adCreativeID,
+		MType:   openrtb2.MarkupNative,
 	}
 
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(1)
