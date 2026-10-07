@@ -315,3 +315,21 @@ func TestMakeBidsImpNotFoundErrors(t *testing.T) {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
 	}
 }
+
+func TestSyntheticBidsIncludeAdvertiserDomain(t *testing.T) {
+	for _, native := range []bool{false, true} {
+		imp := tpctestImp(t, "1", nil, &openrtb2.Banner{W: ptr(300), H: ptr(250)}, nil)
+		if native {
+			imp.Banner = nil
+			imp.Native = &openrtb2.Native{Request: sampleNativeRequest}
+		}
+		response, errs := doMakeBids(t, testBuilder(t), &openrtb2.BidRequest{Test: 1, Imp: []openrtb2.Imp{imp}}, "1", http.StatusOK)
+		if len(errs) > 0 {
+			t.Fatal(errs)
+		}
+		domains := response.Bids[0].Bid.ADomain
+		if len(domains) != 1 || domains[0] != "magneta.app" {
+			t.Fatalf("native=%v adomain=%v", native, domains)
+		}
+	}
+}
