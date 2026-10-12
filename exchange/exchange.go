@@ -27,6 +27,7 @@ import (
 	"github.com/prebid/prebid-server/v4/floors"
 	"github.com/prebid/prebid-server/v4/gdpr"
 	"github.com/prebid/prebid-server/v4/hooks/hookexecution"
+	"github.com/prebid/prebid-server/v4/internal/hol100diag"
 	"github.com/prebid/prebid-server/v4/logger"
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/metrics"
@@ -237,10 +238,13 @@ func (e *exchange) HoldAuction(ctx context.Context, r *AuctionRequest, debugLog 
 		return nil, nil
 	}
 
+	diagnostic := hol100diag.FromContext(ctx)
 	err := r.HookExecutor.ExecuteProcessedAuctionStage(r.BidRequestWrapper)
 	if err != nil {
+		diagnostic.Event(hol100diag.Processed, hol100diag.HookRejected, 0, 0)
 		return nil, err
 	}
+	diagnostic.Event(hol100diag.Processed, hol100diag.OK, 0, 0)
 
 	requestExt, err := r.BidRequestWrapper.GetRequestExt()
 	if err != nil {
@@ -328,6 +332,7 @@ func (e *exchange) HoldAuction(ctx context.Context, r *AuctionRequest, debugLog 
 	if err := r.BidRequestWrapper.RebuildRequest(); err != nil {
 		return nil, err
 	}
+	diagnostic.Input(r.BidRequestWrapper.BidRequest, false)
 
 	// Slice of BidRequests, each a copy of the original cleaned to only contain bidder data for the named bidder
 	requestExtLegacy := &openrtb_ext.ExtRequest{
@@ -335,6 +340,16 @@ func (e *exchange) HoldAuction(ctx context.Context, r *AuctionRequest, debugLog 
 		SChain: requestExt.GetSChain(),
 	}
 	bidderRequests, privacyLabels, errs := e.requestSplitter.cleanOpenRTBRequests(ctx, *r, requestExtLegacy, bidAdjustmentFactors)
+	if diagnostic != nil {
+		category := hol100diag.NotRouted
+		for _, bidderRequest := range bidderRequests {
+			if bidderRequest.BidderName == openrtb_ext.BidderImprezia && len(bidderRequest.BidRequest.Imp) > 0 {
+				category = hol100diag.OK
+				break
+			}
+		}
+		diagnostic.Event(hol100diag.Routed, category, 0, 0)
+	}
 	for _, err := range errs {
 		if errortypes.ReadCode(err) == errortypes.InvalidImpFirstPartyDataErrorCode {
 			return nil, err

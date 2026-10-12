@@ -25,6 +25,7 @@ import (
 	"github.com/prebid/prebid-server/v4/exchange/entities"
 	"github.com/prebid/prebid-server/v4/experiment/adscert"
 	"github.com/prebid/prebid-server/v4/hooks/hookexecution"
+	"github.com/prebid/prebid-server/v4/internal/hol100diag"
 	loggerI "github.com/prebid/prebid-server/v4/logger"
 	"github.com/prebid/prebid-server/v4/version"
 
@@ -176,11 +177,20 @@ type bidderAdapterThrottleConfig struct {
 	deltaValue     float64
 }
 
+func (bidder *BidderAdapter) diagnostic(ctx context.Context) *hol100diag.Trace {
+	if bidder.BidderName != openrtb_ext.BidderImprezia {
+		return nil
+	}
+	return hol100diag.FromContext(ctx)
+}
+
 func (bidder *BidderAdapter) requestBid(ctx context.Context, bidderRequest BidderRequest, conversions currency.Conversions, reqInfo *adapters.ExtraRequestInfo, adsCertSigner adscert.Signer, bidRequestOptions bidRequestOptions, alternateBidderCodes openrtb_ext.ExtAlternateBidderCodes, hookExecutor hookexecution.StageExecutor, ruleToAdjustments openrtb_ext.AdjustmentsByDealID) ([]*entities.PbsOrtbSeatBid, extraBidderRespInfo, []error) {
+	diagnostic := bidder.diagnostic(ctx)
 	request := openrtb_ext.RequestWrapper{BidRequest: bidderRequest.BidRequest}
 	reject := hookExecutor.ExecuteBidderRequestStage(&request, string(bidderRequest.BidderName))
 	seatNonBidBuilder := SeatNonBidBuilder{}
 	if reject != nil {
+		diagnostic.Event(hol100diag.BidderHook, hol100diag.HookRejected, 0, 0)
 		return nil, extraBidderRespInfo{}, []error{reject}
 	}
 
@@ -194,6 +204,8 @@ func (bidder *BidderAdapter) requestBid(ctx context.Context, bidderRequest Bidde
 	// rebuild request after modules execution
 	request.RebuildRequest()
 	bidderRequest.BidRequest = request.BidRequest
+	diagnostic.Input(bidderRequest.BidRequest, true)
+	diagnostic.Event(hol100diag.AdapterInput, hol100diag.OK, 0, 0)
 
 	//check if real request exists for this bidder or it only has stored responses
 	dataLen := 0
@@ -203,7 +215,16 @@ func (bidder *BidderAdapter) requestBid(ctx context.Context, bidderRequest Bidde
 		if bidRequestOptions.tmaxAdjustments != nil && bidRequestOptions.tmaxAdjustments.IsEnforced {
 			bidderRequest.BidRequest.TMax = getBidderTmax(&bidderTmaxCtx{ctx}, bidderRequest.BidRequest.TMax, *bidRequestOptions.tmaxAdjustments)
 		}
+		diagnostic.Input(bidderRequest.BidRequest, true)
 		reqData, errs = bidder.Bidder.MakeRequests(bidderRequest.BidRequest, reqInfo)
+		category := hol100diag.OK
+		if len(reqData) == 0 {
+			category = hol100diag.RequestFailure
+			if diagnostic.MissingRequired() {
+				category = hol100diag.MissingField
+			}
+		}
+		diagnostic.Event(hol100diag.Generated, category, len(reqData), 0)
 
 		if len(reqData) == 0 {
 			// If the adapter failed to generate both requests and errors, this is an error.
@@ -304,11 +325,28 @@ func (bidder *BidderAdapter) requestBid(ctx context.Context, bidderRequest Bidde
 		if httpInfo.err == nil {
 			extraRespInfo.respProcessingStartTime = time.Now()
 			bidResponse, moreErrs := bidder.Bidder.MakeBids(bidderRequest.BidRequest, httpInfo.request, httpInfo.response)
+			if diagnostic != nil {
+				count := 0
+				if bidResponse != nil {
+					count = len(bidResponse.Bids)
+				}
+				category := hol100diag.OK
+				if len(moreErrs) > 0 {
+					category = hol100diag.ParseFailure
+					if httpInfo.response.StatusCode != 200 && httpInfo.response.StatusCode != 204 {
+						category = hol100diag.HTTPRejected
+					}
+				} else if bidResponse == nil {
+					category = hol100diag.NoAd
+				}
+				diagnostic.Event(hol100diag.Parsed, category, count, httpInfo.response.StatusCode)
+			}
 			errs = append(errs, moreErrs...)
 
 			if bidResponse != nil {
 				reject := hookExecutor.ExecuteRawBidderResponseStage(bidResponse, string(bidder.BidderName))
 				if reject != nil {
+					diagnostic.Event(hol100diag.ResponseHook, hol100diag.HookRejected, 0, 0)
 					errs = append(errs, reject)
 					continue
 				}
@@ -572,6 +610,7 @@ func (bidder *BidderAdapter) doRequest(ctx context.Context, req *adapters.Reques
 	if bidder.shouldRequest() {
 		return bidder.doRequestImpl(ctx, req, loggerI.Warnf, bidderRequestStartTime, tmaxAdjustments)
 	}
+	bidder.diagnostic(ctx).Event(hol100diag.HTTPResult, hol100diag.Throttled, 0, 0)
 	return &httpCallInfo{
 		request: req,
 		err:     &errortypes.BidderThrottled{Message: fmt.Sprintf("Bidder %s is temporarily throttled", bidder.BidderName)},
@@ -579,8 +618,10 @@ func (bidder *BidderAdapter) doRequest(ctx context.Context, req *adapters.Reques
 }
 
 func (bidder *BidderAdapter) doRequestImpl(ctx context.Context, req *adapters.RequestData, logger util.LogMsg, bidderRequestStartTime time.Time, tmaxAdjustments *TmaxAdjustmentsPreprocessed) *httpCallInfo {
+	diagnostic := bidder.diagnostic(ctx)
 	requestBody, err := getRequestBody(req, bidder.config.EndpointCompression)
 	if err != nil {
+		diagnostic.Event(hol100diag.HTTPResult, hol100diag.RequestFailure, 0, 0)
 		return &httpCallInfo{
 			request: req,
 			err:     err,
@@ -588,6 +629,7 @@ func (bidder *BidderAdapter) doRequestImpl(ctx context.Context, req *adapters.Re
 	}
 	httpReq, err := http.NewRequest(req.Method, req.Uri, requestBody)
 	if err != nil {
+		diagnostic.Event(hol100diag.HTTPResult, hol100diag.RequestFailure, 0, 0)
 		return &httpCallInfo{
 			request: req,
 			err:     err,
@@ -604,6 +646,7 @@ func (bidder *BidderAdapter) doRequestImpl(ctx context.Context, req *adapters.Re
 
 	if tmaxAdjustments != nil && tmaxAdjustments.IsEnforced {
 		if hasShorterDurationThanTmax(&bidderTmaxCtx{ctx}, *tmaxAdjustments) {
+			diagnostic.Event(hol100diag.HTTPResult, hol100diag.Deadline, 0, 0)
 			bidder.me.RecordTMaxTimeout()
 			return &httpCallInfo{
 				request: req,
@@ -613,8 +656,24 @@ func (bidder *BidderAdapter) doRequestImpl(ctx context.Context, req *adapters.Re
 	}
 
 	httpCallStart := time.Now()
+	diagnostic.Timeout(ctx)
+	if diagnostic != nil {
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{WroteRequest: func(info httptrace.WroteRequestInfo) {
+			category := hol100diag.OK
+			if info.Err != nil {
+				category = hol100diag.Transport
+			}
+			diagnostic.Event(hol100diag.HTTPWritten, category, 0, 0)
+		}})
+	}
+	diagnostic.Event(hol100diag.HTTPExecute, hol100diag.OK, 1, 0)
 	httpResp, err := ctxhttp.Do(ctx, bidder.Client, httpReq)
 	if err != nil {
+		category := hol100diag.Transport
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			category = hol100diag.Deadline
+		}
+		diagnostic.Event(hol100diag.HTTPResult, category, 0, 0)
 		bidder.logHealthCheck(false)
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = &errortypes.Timeout{Message: err.Error()}
@@ -641,12 +700,22 @@ func (bidder *BidderAdapter) doRequestImpl(ctx context.Context, req *adapters.Re
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
+		category := hol100diag.Transport
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			category = hol100diag.Deadline
+		}
+		diagnostic.Event(hol100diag.HTTPResult, category, 0, httpResp.StatusCode)
 		return &httpCallInfo{
 			request: req,
 			err:     err,
 		}
 	}
 
+	category := hol100diag.OK
+	if httpResp.StatusCode != 200 && httpResp.StatusCode != 204 {
+		category = hol100diag.HTTPRejected
+	}
+	diagnostic.Event(hol100diag.HTTPResult, category, 0, httpResp.StatusCode)
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 400 {
 		if httpResp.StatusCode >= 500 {
 			bidder.logHealthCheck(false)
