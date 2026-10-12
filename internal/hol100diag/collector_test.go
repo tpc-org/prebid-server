@@ -3,6 +3,7 @@ package hol100diag
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,4 +105,69 @@ func TestConcurrentCaptureAndEventBounds(t *testing.T) {
 		}
 	}
 	require.Contains(t, string(raw), `"admitted":100`)
+}
+
+type blockedWriter struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (w *blockedWriter) Write(p []byte) (int, error) {
+	w.once.Do(func() { close(w.started) })
+	<-w.release
+	return len(p), nil
+}
+func (w *blockedWriter) Close() error { return nil }
+
+type failedWriter struct{ calls int }
+
+func (w *failedWriter) Write([]byte) (int, error) {
+	w.calls++
+	return 0, errors.New("PRIVATE_DISK_ERROR")
+}
+func (w *failedWriter) Close() error { return nil }
+
+func TestWriterFailureAndFullQueueDoNotBlockAuctions(t *testing.T) {
+	c := &Collector{until: time.Now().Add(time.Minute), limit: 3, queue: make(chan Record, 1), stop: make(chan struct{}, 1), done: make(chan struct{})}
+	sink := &blockedWriter{started: make(chan struct{}), release: make(chan struct{})}
+	go c.write(sink, time.Minute)
+	_, tr := c.begin(context.Background(), motorRequest())
+	tr.Finish(nil, true)
+	<-sink.started
+	_, tr = c.begin(context.Background(), motorRequest())
+	tr.Finish(nil, true)
+	_, tr = c.begin(context.Background(), motorRequest())
+	returned := make(chan struct{})
+	go func() { tr.Finish(nil, true); close(returned) }()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("full diagnostic queue blocked auction")
+	}
+	require.Equal(t, uint64(1), c.dropped.Load())
+	close(sink.release)
+	<-c.done
+	c = &Collector{until: time.Now().Add(time.Minute), limit: 1, queue: make(chan Record, 1), stop: make(chan struct{}, 1), done: make(chan struct{})}
+	failed := &failedWriter{}
+	go c.write(failed, time.Minute)
+	_, tr = c.begin(context.Background(), motorRequest())
+	tr.Finish(nil, true)
+	<-c.done
+	require.Equal(t, 1, failed.calls, "JSON encoder retains the first write failure")
+}
+
+func TestUnrelatedInventoryAndDisabledCapture(t *testing.T) {
+	ctx := context.Background()
+	actual, tr := Begin(ctx, motorRequest())
+	require.Equal(t, ctx, actual)
+	require.Nil(t, tr)
+	path := filepath.Join(t.TempDir(), "capture.jsonl")
+	c, err := newCollector(path, time.Now().Add(20*time.Millisecond), 1)
+	require.NoError(t, err)
+	req := motorRequest()
+	req.Imp[0].Ext = json.RawMessage(`{"prebid":{"storedrequest":{"id":"knewz-4c4c401c"}}}`)
+	_, tr = c.begin(ctx, req)
+	require.Nil(t, tr)
+	<-c.done
 }

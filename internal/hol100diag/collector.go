@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +32,8 @@ const (
 	Parsed
 	BidderHook
 	ResponseHook
+	Validated
+	Routed
 )
 
 type Category uint8
@@ -46,6 +50,8 @@ const (
 	HookRejected
 	Throttled
 	RequestFailure
+	BidRejected
+	NotRouted
 )
 
 type Fields struct {
@@ -69,12 +75,18 @@ type Record struct {
 	Token         string    `json:"token,omitempty"`
 	UTC           time.Time `json:"utc"`
 	Merged        Fields    `json:"merged"`
+	Mapped        Fields    `json:"mapped"`
 	Adapter       Fields    `json:"adapter"`
 	Configured    bool      `json:"configured"`
 	TimeoutMS     int64     `json:"timeout_ms"`
+	HTTPBudgetMS  int64     `json:"http_budget_ms"`
+	BidderTmaxMS  int64     `json:"bidder_tmax_ms"`
 	Events        []Event   `json:"events,omitempty"`
 	EventsDropped int       `json:"events_dropped"`
 	FinalBids     int       `json:"final_bids"`
+	AuctionBids   int       `json:"auction_bids"`
+	FinalKnown    bool      `json:"final_known"`
+	Encoded       bool      `json:"encoded"`
 	FinalReached  bool      `json:"final_reached"`
 	Admitted      uint64    `json:"admitted,omitempty"`
 	Written       uint64    `json:"written,omitempty"`
@@ -83,6 +95,8 @@ type Record struct {
 	Unfinished    uint64    `json:"unfinished"`
 }
 type Collector struct {
+	mu        sync.Mutex
+	closed    bool
 	until     time.Time
 	limit     uint64
 	admitted  atomic.Uint64
@@ -93,12 +107,13 @@ type Collector struct {
 	done      chan struct{}
 }
 type Trace struct {
-	mu        sync.Mutex
-	collector *Collector
-	start     time.Time
-	impID     string // used in memory for final bid matching; never serialized
-	record    Record
-	finished  bool
+	mu           sync.Mutex
+	collector    *Collector
+	start        time.Time
+	impID        string // used in memory for final bid matching; never serialized
+	record       Record
+	finished     bool
+	wireObserved bool
 }
 type contextKey struct{}
 
@@ -122,9 +137,16 @@ func fromEnvironment() *Collector {
 	glog.Warning("HOL-100 diagnostics disabled: invalid activation or unavailable output")
 	return nil
 }
+
+// New starts a collector with the fixed 1,000-auction ceiling.
+func New(path string, until time.Time) (*Collector, error) { return newCollector(path, until, 1000) }
+func (c *Collector) Done() <-chan struct{}                 { return c.done }
+func (c *Collector) Begin(ctx context.Context, req *openrtb_ext.RequestWrapper) (context.Context, *Trace) {
+	return c.begin(ctx, req)
+}
 func newCollector(path string, until time.Time, limit uint64) (*Collector, error) {
 	remaining := time.Until(until)
-	if remaining <= 0 || remaining > 15*time.Minute || limit == 0 || limit > 1000 {
+	if !filepath.IsAbs(path) || remaining <= 0 || remaining > 15*time.Minute || limit == 0 || limit > 1000 {
 		return nil, errors.New("invalid diagnostic bound")
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -135,7 +157,7 @@ func newCollector(path string, until time.Time, limit uint64) (*Collector, error
 	go c.write(f, remaining)
 	return c, nil
 }
-func (c *Collector) write(f *os.File, remaining time.Duration) {
+func (c *Collector) write(f io.WriteCloser, remaining time.Duration) {
 	defer close(c.done)
 	defer f.Close()
 	timer := time.NewTimer(remaining)
@@ -160,6 +182,9 @@ func (c *Collector) write(f *os.File, remaining time.Duration) {
 		}
 	}
 finish:
+	c.mu.Lock()
+	c.closed = true
+	c.mu.Unlock()
 	for {
 		select {
 		case r := <-c.queue:
@@ -172,14 +197,14 @@ summary:
 	admitted, completed := c.admitted.Load(), c.completed.Load()
 	r := Record{Kind: "summary", UTC: time.Now().UTC(), Admitted: admitted, Written: written, Dropped: c.dropped.Load(), WriteFailures: failures, Unfinished: admitted - completed}
 	if enc.Encode(r) != nil || failures > 0 {
-		glog.Warningf("HOL-100 diagnostics output failure: admitted=%d written=%d dropped=%d unfinished=%d", admitted, written, r.Dropped, r.Unfinished)
+		glog.Warningf("HOL-100 diagnostics output failure: admitted=%d written=%d dropped=%d write_failures=%d unfinished=%d", admitted, written, r.Dropped, failures, r.Unfinished)
 	}
 }
 func Begin(ctx context.Context, req *openrtb_ext.RequestWrapper) (context.Context, *Trace) {
 	return defaultCollector.begin(ctx, req)
 }
 func (c *Collector) begin(ctx context.Context, req *openrtb_ext.RequestWrapper) (context.Context, *Trace) {
-	if c == nil || req == nil || req.Test == 1 || len(req.Imp) != 1 || !time.Now().Before(c.until) {
+	if c == nil || req == nil || req.Test == 1 || len(req.Imp) != 1 || !time.Now().Before(c.until) || c.admitted.Load() >= c.limit {
 		return ctx, nil
 	}
 	// Single-impression scope prevents misattributing a batched adapter response.
@@ -198,15 +223,12 @@ func (c *Collector) begin(ctx context.Context, req *openrtb_ext.RequestWrapper) 
 	if _, err := rand.Read(token[:]); err != nil {
 		return ctx, nil
 	}
-	for {
-		n := c.admitted.Load()
-		if n >= c.limit {
-			return ctx, nil
-		}
-		if c.admitted.CompareAndSwap(n, n+1) {
-			break
-		}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || !time.Now().Before(c.until) || c.admitted.Load() >= c.limit {
+		return ctx, nil
 	}
+	c.admitted.Add(1)
 	tr := &Trace{collector: c, start: time.Now(), impID: req.Imp[0].ID, record: Record{Kind: "auction", Token: hex.EncodeToString(token[:]), UTC: time.Now().UTC(), Configured: ext.Prebid.Bidder["imprezia"] != nil, Merged: presence(ext.Prebid.Bidder["imprezia"])}}
 	if deadline, ok := ctx.Deadline(); ok {
 		tr.record.TimeoutMS = max(0, time.Until(deadline).Milliseconds())
@@ -246,6 +268,23 @@ func (tr *Trace) Input(req *openrtb2.BidRequest, adapter bool) {
 	}
 	if adapter {
 		tr.record.Adapter = f
+		tr.record.BidderTmaxMS = req.TMax
+	} else {
+		tr.record.Mapped = f
+	}
+}
+
+func (tr *Trace) Timeout(ctx context.Context) {
+	if tr == nil {
+		return
+	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	if tr.finished || !time.Now().Before(tr.collector.until) {
+		return
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		tr.record.HTTPBudgetMS = max(0, time.Until(deadline).Milliseconds())
 	}
 }
 func (tr *Trace) Event(stage Stage, category Category, count, status int) {
@@ -257,7 +296,7 @@ func (tr *Trace) Event(stage Stage, category Category, count, status int) {
 	if tr.finished || !time.Now().Before(tr.collector.until) {
 		return
 	}
-	if stage < Processed || stage > ResponseHook || category > RequestFailure {
+	if stage < Processed || stage > Routed || category > NotRouted {
 		return
 	}
 	if len(tr.record.Events) >= 32 {
@@ -285,20 +324,16 @@ func (tr *Trace) Finish(response *openrtb2.BidResponse, reached bool) {
 		return
 	}
 	tr.finished = true
-	if !time.Now().Before(tr.collector.until) {
+	tr.collector.mu.Lock()
+	defer tr.collector.mu.Unlock()
+	if tr.collector.closed || !time.Now().Before(tr.collector.until) {
 		return
 	}
 	tr.record.FinalReached = reached
-	if response != nil {
-		for _, seat := range response.SeatBid {
-			if seat.Seat == "imprezia" {
-				for _, bid := range seat.Bid {
-					if bid.ImpID == tr.impID {
-						tr.record.FinalBids++
-					}
-				}
-			}
-		}
+	tr.record.AuctionBids = tr.countBids(response)
+	if !tr.wireObserved {
+		tr.record.FinalKnown = reached
+		tr.record.FinalBids = tr.record.AuctionBids
 	}
 	select {
 	case tr.collector.queue <- tr.record:
@@ -311,4 +346,44 @@ func (tr *Trace) Finish(response *openrtb2.BidResponse, reached bool) {
 		default:
 		}
 	}
+}
+
+// Final observes the object actually passed to the response encoder after
+// exitpoint hooks. An arbitrary replacement type stays explicitly unknown.
+func (tr *Trace) Final(value any, encoded bool) {
+	if tr == nil {
+		return
+	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	if tr.finished || !time.Now().Before(tr.collector.until) {
+		return
+	}
+	tr.wireObserved = true
+	tr.record.Encoded = encoded
+	switch response := value.(type) {
+	case *openrtb2.BidResponse:
+		tr.record.FinalKnown = true
+		tr.record.FinalBids = tr.countBids(response)
+	case openrtb2.BidResponse:
+		tr.record.FinalKnown = true
+		tr.record.FinalBids = tr.countBids(&response)
+	default:
+		tr.record.FinalKnown = false
+	}
+}
+func (tr *Trace) countBids(response *openrtb2.BidResponse) int {
+	n := 0
+	if response != nil {
+		for _, seat := range response.SeatBid {
+			if seat.Seat == "imprezia" {
+				for _, bid := range seat.Bid {
+					if bid.ImpID == tr.impID {
+						n++
+					}
+				}
+			}
+		}
+	}
+	return n
 }
