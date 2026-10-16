@@ -58,7 +58,7 @@ func TestHOL100FinalResponseAfterHooks(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "capture.jsonl")
 			c, err := hol100diag.New(path, time.Now().Add(time.Second))
 			require.NoError(t, err)
-			req := &openrtb2.BidRequest{Imp: []openrtb2.Imp{{ID: "private-imp", Ext: json.RawMessage(`{"prebid":{"storedrequest":{"id":"motortalk-2a3f7609"}}}`)}}}
+			req := &openrtb2.BidRequest{Imp: []openrtb2.Imp{{ID: "private-imp", Ext: json.RawMessage(`{"prebid":{"storedrequest":{"id":"learnrithm-d122e2e9"}}}`)}}}
 			_, tr := c.Begin(context.Background(), &openrtb_ext.RequestWrapper{BidRequest: req})
 			require.NotNil(t, tr)
 			response := &openrtb2.BidResponse{SeatBid: []openrtb2.SeatBid{{Seat: "imprezia", Bid: []openrtb2.Bid{{ID: "private-bid", ImpID: "private-imp", Price: 14}}}}}

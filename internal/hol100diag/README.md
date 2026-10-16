@@ -1,6 +1,6 @@
 # HOL-100 bounded observation
 
-Motor-talk has configured Imprezia activity but zero final bids. Existing activity
+Learnrithm and PrompTessor have configured Imprezia activity but almost no final bids. Existing activity
 logging counts configured bidders, not HTTP calls. This temporary observer answers:
 
 1. Did merged input acquire required fields through paramfanout and reach the adapter?
@@ -21,10 +21,15 @@ An absolute expiry and exclusive file creation prevent accidental restart/reuse.
 The file is mode 0600, owned by PBS's existing runtime user. Missing/invalid
 activation or file-open failure disables capture without affecting auctions.
 
-Scope: `/openrtb2/auction`, non-test, **single-impression** auctions referencing
-`motortalk-2a3f7609`. Bidder and transport events observe direct Imprezia only.
-Mixed auctions and alternate bidder aliases are excluded to avoid misattributing
-batched responses. Report this sampling limitation; never extrapolate to excluded
+HOL-111 reuses the existing HOL-100 collector and activation variables; disabled Inline inventory is excluded. The serialized `placement` is one of these two fixed stored-imp labels, never a client-supplied arbitrary ID.
+
+Scope: `/openrtb2/auction`, non-test auctions with exactly one impression referencing
+`learnrithm-d122e2e9` or `promptessor-bfc732a4`. Companion impressions may contain
+only the `tpc` stub bidder or no bidders. Other real-bidder companions and duplicate
+target impressions are excluded to avoid misattributing batched responses.
+Auctions with request-level aliases are excluded. Bidder and transport events
+observe direct Imprezia only.
+Report this sampling limitation; never extrapolate to excluded
 traffic. The merged stage begins after stored request/imp resolution and request
 validation. Requests rejected before that point are outside this observation.
 

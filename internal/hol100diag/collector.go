@@ -72,6 +72,7 @@ type Event struct {
 }
 type Record struct {
 	Kind          string    `json:"kind"`
+	Placement     string    `json:"placement,omitempty"`
 	Token         string    `json:"token,omitempty"`
 	UTC           time.Time `json:"utc"`
 	Merged        Fields    `json:"merged"`
@@ -111,10 +112,19 @@ type Trace struct {
 	collector    *Collector
 	start        time.Time
 	impID        string // used in memory for final bid matching; never serialized
+	scope        placementScope
 	record       Record
 	finished     bool
 	wireObserved bool
 }
+
+type placementScope struct{ surface, slot string }
+
+var placements = map[string]placementScope{
+	"learnrithm-d122e2e9":  {"7ce7e8f5-32cb-4788-92bf-cc2a04d75ec3", "learnrithm-lesson-main"},
+	"promptessor-bfc732a4": {"d4f698a8-507a-4622-9c33-da53a198650d", "promptessor-main"},
+}
+
 type contextKey struct{}
 
 // Activation requires both startup environment values. An absolute deadline
@@ -204,11 +214,18 @@ func Begin(ctx context.Context, req *openrtb_ext.RequestWrapper) (context.Contex
 	return defaultCollector.begin(ctx, req)
 }
 func (c *Collector) begin(ctx context.Context, req *openrtb_ext.RequestWrapper) (context.Context, *Trace) {
-	if c == nil || req == nil || req.Test == 1 || len(req.Imp) != 1 || !time.Now().Before(c.until) || c.admitted.Load() >= c.limit {
+	if c == nil || req == nil || req.Test == 1 || !time.Now().Before(c.until) || c.admitted.Load() >= c.limit {
 		return ctx, nil
 	}
-	// Single-impression scope prevents misattributing a batched adapter response.
-	var ext struct {
+	requestExt, err := req.GetRequestExt()
+	if err != nil {
+		return ctx, nil
+	}
+	if prebid := requestExt.GetPrebid(); prebid != nil && len(prebid.Aliases) != 0 {
+		return ctx, nil
+	}
+	// Only stub companions are safe: another real impression could batch HTTP results.
+	type mergedExt struct {
 		Prebid struct {
 			StoredRequest struct {
 				ID string `json:"id"`
@@ -216,9 +233,30 @@ func (c *Collector) begin(ctx context.Context, req *openrtb_ext.RequestWrapper) 
 			Bidder map[string]json.RawMessage `json:"bidder"`
 		} `json:"prebid"`
 	}
-	if json.Unmarshal(req.Imp[0].Ext, &ext) != nil || ext.Prebid.StoredRequest.ID != "motortalk-2a3f7609" {
+	var ext mergedExt
+	index := -1
+	for i := range req.Imp {
+		var candidate mergedExt
+		if json.Unmarshal(req.Imp[i].Ext, &candidate) != nil {
+			return ctx, nil
+		}
+		if _, allowed := placements[candidate.Prebid.StoredRequest.ID]; allowed {
+			if index != -1 {
+				return ctx, nil
+			}
+			index, ext = i, candidate
+		} else {
+			for bidder := range candidate.Prebid.Bidder {
+				if bidder != "tpc" {
+					return ctx, nil
+				}
+			}
+		}
+	}
+	if index == -1 {
 		return ctx, nil
 	}
+	scope := placements[ext.Prebid.StoredRequest.ID]
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
 		return ctx, nil
@@ -229,24 +267,34 @@ func (c *Collector) begin(ctx context.Context, req *openrtb_ext.RequestWrapper) 
 		return ctx, nil
 	}
 	c.admitted.Add(1)
-	tr := &Trace{collector: c, start: time.Now(), impID: req.Imp[0].ID, record: Record{Kind: "auction", Token: hex.EncodeToString(token[:]), UTC: time.Now().UTC(), Configured: ext.Prebid.Bidder["imprezia"] != nil, Merged: presence(ext.Prebid.Bidder["imprezia"])}}
+	tr := &Trace{collector: c, start: time.Now(), impID: req.Imp[index].ID, scope: scope, record: Record{Kind: "auction", Placement: ext.Prebid.StoredRequest.ID, Token: hex.EncodeToString(token[:]), UTC: time.Now().UTC(), Configured: ext.Prebid.Bidder["imprezia"] != nil, Merged: presence(ext.Prebid.Bidder["imprezia"], scope)}}
 	if deadline, ok := ctx.Deadline(); ok {
 		tr.record.TimeoutMS = max(0, time.Until(deadline).Milliseconds())
 	}
 	return context.WithValue(ctx, contextKey{}, tr), tr
 }
 func FromContext(ctx context.Context) *Trace { tr, _ := ctx.Value(contextKey{}).(*Trace); return tr }
-func presence(raw json.RawMessage) Fields {
+func presence(raw json.RawMessage, scope placementScope) Fields {
 	var p openrtb_ext.ExtImpImprezia
 	if len(raw) == 0 || json.Unmarshal(raw, &p) != nil {
 		return Fields{}
 	}
-	return Fields{Request: p.Request != "", Response: p.Response != "", Timestamp: p.Timestamp != "", DeviceContext: p.DeviceContext != nil, SurfaceMatches: p.SiteID == "27d0f05d-3dc0-4958-8842-2564fe96932a", SlotMatches: p.PlacementID == "motor-talk-main", ValidJSON: true}
+	return Fields{Request: p.Request != "", Response: p.Response != "", Timestamp: p.Timestamp != "", DeviceContext: p.DeviceContext != nil, SurfaceMatches: p.SiteID == scope.surface, SlotMatches: p.PlacementID == scope.slot, ValidJSON: true}
 }
 
 // Input observes the rebuilt, bidder-specific request after privacy and hooks.
 func (tr *Trace) Input(req *openrtb2.BidRequest, adapter bool) {
-	if tr == nil || req == nil || len(req.Imp) != 1 {
+	if tr == nil || req == nil {
+		return
+	}
+	var target *openrtb2.Imp
+	for i := range req.Imp {
+		if req.Imp[i].ID == tr.impID {
+			target = &req.Imp[i]
+			break
+		}
+	}
+	if target == nil {
 		return
 	}
 	var ext struct {
@@ -255,12 +303,12 @@ func (tr *Trace) Input(req *openrtb2.BidRequest, adapter bool) {
 			Bidder map[string]json.RawMessage `json:"bidder"`
 		} `json:"prebid"`
 	}
-	_ = json.Unmarshal(req.Imp[0].Ext, &ext)
+	_ = json.Unmarshal(target.Ext, &ext)
 	raw := ext.Bidder
 	if !adapter {
 		raw = ext.Prebid.Bidder["imprezia"]
 	}
-	f := presence(raw)
+	f := presence(raw, tr.scope)
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	if tr.finished || !time.Now().Before(tr.collector.until) {

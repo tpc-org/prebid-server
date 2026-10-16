@@ -74,11 +74,11 @@ func TestHOL100DiagnosticPipeline(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "capture.jsonl")
 			c, err := hol100diag.New(path, time.Now().Add(time.Second))
 			require.NoError(t, err)
-			params := map[string]any{"siteId": "27d0f05d-3dc0-4958-8842-2564fe96932a", "placementId": "motor-talk-main", "request": "PRIVATE_CHAT", "response": "PRIVATE_REPLY", "timestamp": "PRIVATE_TIMESTAMP", "deviceContext": map[string]any{}, "bidPrice": 14}
+			params := map[string]any{"siteId": "7ce7e8f5-32cb-4788-92bf-cc2a04d75ec3", "placementId": "learnrithm-lesson-main", "request": "PRIVATE_CHAT", "response": "PRIVATE_REPLY", "timestamp": "PRIVATE_TIMESTAMP", "deviceContext": map[string]any{}, "bidPrice": 14}
 			if tc.missing != "" {
 				delete(params, tc.missing)
 			}
-			mergedExt, _ := json.Marshal(map[string]any{"prebid": map[string]any{"storedrequest": map[string]string{"id": "motortalk-2a3f7609"}, "bidder": map[string]any{"imprezia": params}}})
+			mergedExt, _ := json.Marshal(map[string]any{"prebid": map[string]any{"storedrequest": map[string]string{"id": "learnrithm-d122e2e9"}, "bidder": map[string]any{"imprezia": params}}})
 			req := &openrtb2.BidRequest{ID: "PRIVATE_ID", Imp: []openrtb2.Imp{{ID: "PRIVATE_IMP", Ext: mergedExt}}}
 			ctx, tr := c.Begin(context.Background(), &openrtb_ext.RequestWrapper{BidRequest: req})
 			require.NotNil(t, tr)
@@ -150,7 +150,7 @@ func TestHOL100ActualHTTPWriteAndBidderScope(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "capture.jsonl")
 	c, err := hol100diag.New(path, time.Now().Add(time.Second))
 	require.NoError(t, err)
-	request := &openrtb_ext.RequestWrapper{BidRequest: &openrtb2.BidRequest{Imp: []openrtb2.Imp{{ID: "private", Ext: json.RawMessage(`{"prebid":{"storedrequest":{"id":"motortalk-2a3f7609"}}}`)}}}}
+	request := &openrtb_ext.RequestWrapper{BidRequest: &openrtb2.BidRequest{Imp: []openrtb2.Imp{{ID: "private", Ext: json.RawMessage(`{"prebid":{"storedrequest":{"id":"learnrithm-d122e2e9"}}}`)}}}}
 	ctx, tr := c.Begin(context.Background(), request)
 	require.NotNil(t, tr)
 	bidder := &BidderAdapter{BidderName: openrtb_ext.BidderImprezia, Client: server.Client(), me: &metricsConfig.NilMetricsEngine{}}
