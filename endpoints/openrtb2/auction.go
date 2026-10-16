@@ -39,6 +39,7 @@ import (
 	"github.com/prebid/prebid-server/v4/exchange"
 	"github.com/prebid/prebid-server/v4/gdpr"
 	"github.com/prebid/prebid-server/v4/hooks/hookexecution"
+	"github.com/prebid/prebid-server/v4/internal/hol100diag"
 	"github.com/prebid/prebid-server/v4/metrics"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 	"github.com/prebid/prebid-server/v4/prebid_cache_client"
@@ -264,6 +265,9 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 		GDPRSignal:                 gdprSignal,
 		GDPREnforced:               gdprEnforced,
 	}
+	ctx, diagnostic := hol100diag.Begin(ctx, req)
+	finalReached := false
+	defer func() { diagnostic.Finish(ao.Response, finalReached) }()
 	auctionResponse, err := deps.ex.HoldAuction(ctx, auctionRequest, nil)
 	defer func() {
 		if !auctionRequest.BidderResponseStartTime.IsZero() {
@@ -292,7 +296,8 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 		ao.Errors = append(ao.Errors, err)
 		return
 	} else if isRejectErr {
-		labels, ao = rejectAuctionRequest(*rejectErr, w, hookExecutor, req.BidRequest, account, labels, ao)
+		labels, ao = rejectAuctionRequest(*rejectErr, w, hookExecutor, req.BidRequest, account, labels, ao, diagnostic)
+		finalReached = true
 		return
 	}
 
@@ -300,7 +305,8 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 	if err != nil {
 		logger.Errorf("Error setting seat non-bid: %v", err)
 	}
-	labels, ao = sendAuctionResponse(w, hookExecutor, response, req.BidRequest, account, labels, ao)
+	labels, ao = sendAuctionResponse(w, hookExecutor, response, req.BidRequest, account, labels, ao, diagnostic)
+	finalReached = true
 }
 
 // setSeatNonBidRaw is transitional function for setting SeatNonBid inside bidResponse.Ext
@@ -338,6 +344,7 @@ func rejectAuctionRequest(
 	account *config.Account,
 	labels metrics.Labels,
 	ao analytics.AuctionObject,
+	diagnostics ...*hol100diag.Trace,
 ) (metrics.Labels, analytics.AuctionObject) {
 	response := &openrtb2.BidResponse{NBR: openrtb3.NoBidReason(rejectErr.NBR).Ptr()}
 	if request != nil {
@@ -347,7 +354,7 @@ func rejectAuctionRequest(
 	ao.Response = response
 	ao.Errors = append(ao.Errors, rejectErr)
 
-	return sendAuctionResponse(w, hookExecutor, response, request, account, labels, ao)
+	return sendAuctionResponse(w, hookExecutor, response, request, account, labels, ao, diagnostics...)
 }
 
 func sendAuctionResponse(
@@ -358,6 +365,7 @@ func sendAuctionResponse(
 	account *config.Account,
 	labels metrics.Labels,
 	ao analytics.AuctionObject,
+	diagnostics ...*hol100diag.Trace,
 ) (metrics.Labels, analytics.AuctionObject) {
 	hookExecutor.ExecuteAuctionResponseStage(response)
 
@@ -391,7 +399,11 @@ func sendAuctionResponse(
 	// If an error happens when encoding the response, there isn't much we can do.
 	// If we've sent _any_ bytes, then Go would have sent the 200 status code first.
 	// That status code can't be un-sent... so the best we can do is log the error.
-	if err := enc.Encode(finalResponse); err != nil {
+	encodeErr := enc.Encode(finalResponse)
+	for _, diagnostic := range diagnostics {
+		diagnostic.Final(finalResponse, encodeErr == nil)
+	}
+	if err := encodeErr; err != nil {
 		labels.RequestStatus = metrics.RequestStatusNetworkErr
 		ao.Errors = append(ao.Errors, fmt.Errorf("/openrtb2/auction Failed to send response: %v", err))
 	}

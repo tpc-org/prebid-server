@@ -12,6 +12,7 @@ import (
 	"github.com/prebid/prebid-server/v4/exchange/entities"
 	"github.com/prebid/prebid-server/v4/experiment/adscert"
 	"github.com/prebid/prebid-server/v4/hooks/hookexecution"
+	"github.com/prebid/prebid-server/v4/internal/hol100diag"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 	goCurrency "golang.org/x/text/currency"
 )
@@ -34,8 +35,19 @@ type validatedBidder struct {
 func (v *validatedBidder) requestBid(ctx context.Context, bidderRequest BidderRequest, conversions currency.Conversions, reqInfo *adapters.ExtraRequestInfo, adsCertSigner adscert.Signer, bidRequestOptions bidRequestOptions, alternateBidderCodes openrtb_ext.ExtAlternateBidderCodes, hookExecutor hookexecution.StageExecutor, ruleToAdjustments openrtb_ext.AdjustmentsByDealID) ([]*entities.PbsOrtbSeatBid, extraBidderRespInfo, []error) {
 	seatBids, extraBidderRespInfo, errs := v.bidder.requestBid(ctx, bidderRequest, conversions, reqInfo, adsCertSigner, bidRequestOptions, alternateBidderCodes, hookExecutor, ruleToAdjustments)
 	for _, seatBid := range seatBids {
+		before := 0
+		if seatBid != nil {
+			before = len(seatBid.Bids)
+		}
 		if validationErrors := removeInvalidBids(bidderRequest.BidRequest, seatBid, bidRequestOptions.responseDebugAllowed); len(validationErrors) > 0 {
 			errs = append(errs, validationErrors...)
+		}
+		if bidderRequest.BidderName == openrtb_ext.BidderImprezia && seatBid != nil {
+			category := hol100diag.OK
+			if len(seatBid.Bids) < before {
+				category = hol100diag.BidRejected
+			}
+			hol100diag.FromContext(ctx).Event(hol100diag.Validated, category, len(seatBid.Bids), 0)
 		}
 	}
 	return seatBids, extraBidderRespInfo, errs
