@@ -1,0 +1,19 @@
+# Thrad protocol v2 (docs.thrad.ai/api/api-reference/bid-request-v2), run
+# side by side with the v1 "thrad" bidder for testing. At cutover this code
+# replaces adapters/thrad and the bidder is renamed back to "thrad" — see
+# adapters/thradx/thradx.go's package doc.
+#
+# disabled: true is step 1 of the 3-step new-bidder rollout (deploy disabled
+# → deploy pbs-settings' adapters.thradx.extra_info → deploy enabled). Without
+# it, Builder() fails on the missing extra_info and PBS won't boot.
+endpoint: "https://ssp.thrad.ai/api/v2/bid-request"
+disabled: true
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - native
+  app:
+    mediaTypes:
+      - native

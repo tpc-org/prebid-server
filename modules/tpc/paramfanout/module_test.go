@@ -217,3 +217,78 @@ func mustJSON(t *testing.T, v interface{}) json.RawMessage {
 	require.NoError(t, err)
 	return b
 }
+
+// Web bundle, sayhola v2 test mode: the bundle sends params.thradx, which
+// pbsExtensions nests under ext.prebid.bidder.tpc; the Stored Imp's static
+// thradx block gets the dynamic fields copied in.
+func TestFanOutThradxFromNestedWebParams(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc": mustJSON(t, map[string]interface{}{
+			"placementId": "sayhola-thradx-test",
+			"thradx": map[string]interface{}{
+				"userId":      "user-1",
+				"chatId":      "chat-1",
+				"requestType": "contextual",
+				"messages":    []map[string]string{{"role": "user", "content": "shoes?", "timestamp": "2026-10-20T12:00:00Z"}},
+			},
+		}),
+		"thradx": mustJSON(t, map[string]interface{}{"publisherId": "sayhola", "requestType": "opener"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thradx := bidderExt(t, rw, "thradx")
+	assert.Equal(t, "sayhola", thradx["publisherId"])
+	assert.Equal(t, "opener", thradx["requestType"], "static Stored Imp fields are never overwritten")
+	assert.Equal(t, "user-1", thradx["userId"])
+	assert.Equal(t, "chat-1", thradx["chatId"])
+	msgs := thradx["messages"].([]interface{})
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "2026-10-20T12:00:00Z", msgs[0].(map[string]interface{})["timestamp"])
+}
+
+// A bundle that only sends v1 params (tpc.thrad) still feeds thradx.
+func TestFanOutThradxFallsBackToNestedThrad(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc":    mustJSON(t, map[string]interface{}{"thrad": map[string]interface{}{"userId": "user-2", "chatId": "chat-2"}}),
+		"thradx": mustJSON(t, map[string]interface{}{"publisherId": "sayhola"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thradx := bidderExt(t, rw, "thradx")
+	assert.Equal(t, "user-2", thradx["userId"])
+	assert.Equal(t, "chat-2", thradx["chatId"])
+}
+
+// Server-side/mobile generic block: sessionId stands in for chatId.
+func TestFanOutThradxFromGenericBlock(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc": mustJSON(t, map[string]interface{}{
+			"userId":    "user-3",
+			"sessionId": "session-3",
+			"messages":  []map[string]string{{"role": "user", "content": "hi"}},
+		}),
+		"thradx": mustJSON(t, map[string]interface{}{"publisherId": "sayhola"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thradx := bidderExt(t, rw, "thradx")
+	assert.Equal(t, "user-3", thradx["userId"])
+	assert.Equal(t, "session-3", thradx["chatId"])
+	assert.Len(t, thradx["messages"], 1)
+}
+
+func TestFanOutThradxNeverOverwrites(t *testing.T) {
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc":    mustJSON(t, map[string]interface{}{"thradx": map[string]interface{}{"userId": "nested", "chatId": "nested"}}),
+		"thradx": mustJSON(t, map[string]interface{}{"publisherId": "sayhola", "userId": "already", "chatId": "already"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thradx := bidderExt(t, rw, "thradx")
+	assert.Equal(t, "already", thradx["userId"])
+	assert.Equal(t, "already", thradx["chatId"])
+}

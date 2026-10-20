@@ -1,0 +1,126 @@
+{
+  "mockBidRequest": {
+    "id": "req-7",
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "publisherId": "sayhola"
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrad.ai/api/v2/bid-request",
+        "body": {
+          "version": "2.0",
+          "id": "req-7",
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "formats": [
+                {
+                  "type": "card",
+                  "assets": {
+                    "title": {
+                      "max_chars": 80
+                    },
+                    "description": {
+                      "max_chars": 100
+                    },
+                    "image": {}
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "version": "2.0",
+          "id": "req-7",
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "bids": [
+                {
+                  "id": "b7",
+                  "price_cpm": 2,
+                  "advertiser": {
+                    "name": "Acme",
+                    "logo_url": "https://img.example/l.png"
+                  },
+                  "trackers": [
+                    {
+                      "event": "rendered",
+                      "method": "pixel",
+                      "url": "https://t.example/r"
+                    },
+                    {
+                      "event": "hovered",
+                      "method": "pixel",
+                      "url": "https://t.example/h"
+                    },
+                    {
+                      "event": "viewable",
+                      "method": "js",
+                      "url": "https://t.example/v.js"
+                    }
+                  ],
+                  "format": "card",
+                  "assets": {
+                    "title": "Acme widgets",
+                    "description": "d"
+                  },
+                  "actions": {
+                    "click_url": "https://c.example/"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": [
+        {
+          "type": "native",
+          "bid": {
+            "id": "b7",
+            "impid": "imp-1",
+            "price": 2,
+            "crid": "b7",
+            "adm": "{\"ver\":\"1.2\",\"link\":{\"url\":\"https://c.example/\"},\"assets\":[{\"id\":0,\"title\":{\"text\":\"Acme widgets\"}},{\"id\":1,\"img\":{\"url\":\"https://img.example/l.png\",\"type\":1}},{\"id\":2,\"data\":{\"value\":\"d\"}},{\"id\":3,\"data\":{\"value\":\"Acme\"}},{\"id\":4,\"data\":{\"value\":\"Learn More\"}}],\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://t.example/r\"}]}"
+          }
+        }
+      ]
+    }
+  ],
+  "expectedMakeBidsErrors": [
+    {
+      "value": "thradx: bid b7: unknown tracker event \"hovered\", not fired",
+      "comparison": "literal"
+    },
+    {
+      "value": "thradx: bid b7: unsupported tracker method \"js\" for viewable event, not fired",
+      "comparison": "literal"
+    }
+  ]
+}

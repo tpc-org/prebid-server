@@ -1,0 +1,225 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "site": {
+      "page": "https://chat.sayhola.ai/c/abc",
+      "domain": "chat.sayhola.ai"
+    },
+    "device": {
+      "ip": "8.8.8.8",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36",
+      "language": "en",
+      "geo": {
+        "country": "USA",
+        "region": "CA",
+        "city": "San Francisco"
+      }
+    },
+    "regs": {
+      "gdpr": 0,
+      "us_privacy": "1YNN"
+    },
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "publisherId": "sayhola",
+            "requestType": "contextual",
+            "adFormats": [
+              "sponsored_message"
+            ],
+            "userId": "user-123",
+            "chatId": "chat-456",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Best trail running shoes?",
+                "timestamp": "2026-10-20T12:00:00Z"
+              },
+              {
+                "role": "assistant",
+                "content": "Look for grip and drainage.",
+                "timestamp": "2026-10-20T12:00:04Z"
+              },
+              {
+                "role": "system",
+                "content": "ignored"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrad.ai/api/v2/bid-request",
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "Authorization": [
+            "Bearer pk_test_production"
+          ]
+        },
+        "body": {
+          "version": "2.0",
+          "id": "req-1",
+          "context": {
+            "id": "chat-456",
+            "flow": "chat",
+            "chat": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Best trail running shoes?",
+                  "timestamp": 1792497600
+                },
+                {
+                  "role": "assistant",
+                  "content": "Look for grip and drainage.",
+                  "timestamp": 1792497604
+                }
+              ],
+              "turn_number": 1
+            }
+          },
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "formats": [
+                {
+                  "type": "card",
+                  "assets": {
+                    "title": {
+                      "max_chars": 80
+                    },
+                    "description": {
+                      "max_chars": 100
+                    },
+                    "image": {}
+                  }
+                }
+              ]
+            }
+          ],
+          "user": {
+            "id": "user-123"
+          },
+          "device": {
+            "geo": {
+              "country": "US",
+              "region": "CA",
+              "city": "San Francisco"
+            },
+            "type": "desktop",
+            "os": "macos",
+            "language": "en",
+            "ip": "8.8.8.8",
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+          },
+          "surface": {
+            "type": "web",
+            "domain": "chat.sayhola.ai"
+          },
+          "privacy": {
+            "gdpr_applies": false,
+            "us_privacy": "1YNN"
+          }
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "version": "2.0",
+          "id": "req-1",
+          "currency": "USD",
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "bids": [
+                {
+                  "id": "bid-abc",
+                  "price_cpm": 4.74,
+                  "currency": "USD",
+                  "ttl_ms": 3660000,
+                  "advertiser": {
+                    "name": "Trailhead Outfitters",
+                    "domain": "trailhead.example",
+                    "logo_url": "https://img.example/logo.png"
+                  },
+                  "trackers": [
+                    {
+                      "event": "viewable",
+                      "method": "pixel",
+                      "url": "https://ssp.thrads.ai/api/v1/tracking/ssp-view?token=v"
+                    },
+                    {
+                      "event": "rendered",
+                      "method": "pixel",
+                      "url": "https://dsp.example/imp?id=r"
+                    },
+                    {
+                      "event": "click",
+                      "method": "pixel",
+                      "url": "https://dsp.example/click?id=c"
+                    }
+                  ],
+                  "win_url": "https://ssp.thrads.ai/api/v2/auction/win?token=w",
+                  "loss_url": "https://ssp.thrads.ai/api/v2/auction/loss?token=l&reason=${AUCTION_LOSS}",
+                  "format": "card",
+                  "assets": {
+                    "title": "Trail-tested shoes for long runs",
+                    "description": "Lightweight and weatherproof.",
+                    "cta": "Shop Now",
+                    "image": {
+                      "url": "https://media.thrads.ai/shoe.png"
+                    }
+                  },
+                  "actions": {
+                    "click_url": "https://dsp.thrad.ai/api/v1/tracking/redirect?token=x",
+                    "feedback_url": "https://dsp.thrad.ai/api/v1/tracking/feedback?token=f"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": [
+        {
+          "bid": {
+            "id": "bid-abc",
+            "impid": "imp-1",
+            "price": 4.74,
+            "adm": "{\"ver\":\"1.2\",\"link\":{\"url\":\"https://dsp.thrad.ai/api/v1/tracking/redirect?token=x\",\"clicktrackers\":[\"https://dsp.example/click?id=c\"]},\"assets\":[{\"id\":0,\"title\":{\"text\":\"Trail-tested shoes for long runs\"}},{\"id\":1,\"img\":{\"url\":\"https://media.thrads.ai/shoe.png\",\"type\":3}},{\"id\":2,\"data\":{\"value\":\"Lightweight and weatherproof.\"}},{\"id\":3,\"data\":{\"value\":\"Trailhead Outfitters\"}},{\"id\":4,\"data\":{\"value\":\"Shop Now\"}}],\"eventtrackers\":[{\"event\":2,\"method\":1,\"url\":\"https://ssp.thrads.ai/api/v1/tracking/ssp-view?token=v\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/imp?id=r\"}]}",
+            "burl": "https://ssp.thrads.ai/api/v2/auction/win?token=w",
+            "adomain": [
+              "trailhead.example"
+            ],
+            "crid": "bid-abc",
+            "exp": 3660
+          },
+          "type": "native"
+        }
+      ]
+    }
+  ]
+}
