@@ -56,7 +56,7 @@
   "expectedBidResponses": [],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: failed to parse response: json: cannot unmarshal string into Go value of type thradx.v2Response",
+      "value": "thrad: failed to parse response: json: cannot unmarshal string into Go value of type thrad.v2Response",
       "comparison": "literal"
     }
   ]
