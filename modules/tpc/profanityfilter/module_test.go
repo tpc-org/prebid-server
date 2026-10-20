@@ -201,3 +201,47 @@ func TestBuilderErrorsOnMalformedWordsFile(t *testing.T) {
 	_, err = Builder(cfg, moduledeps.ModuleDeps{})
 	assert.Error(t, err)
 }
+
+func impWithBidders(bidders map[string]interface{}) openrtb2.Imp {
+	extJSON, _ := json.Marshal(map[string]interface{}{
+		"prebid": map[string]interface{}{"bidder": bidders},
+	})
+	return openrtb2.Imp{ID: "1", Ext: extJSON}
+}
+
+func userMessages(content string) []map[string]interface{} {
+	return []map[string]interface{}{{"role": "user", "content": content}}
+}
+
+// The sayhola v2 test mode sends conversation text only as tpc.thradx
+// (paramfanout copies it to the top-level thradx key, but in parallel with
+// this hook) — it must still be filtered.
+func TestRejectsThradxMessagesNestedUnderTpc(t *testing.T) {
+	module := testBuilder(t, []string{"fuck"})
+	imp := impWithBidders(map[string]interface{}{
+		"tpc":    map[string]interface{}{"thradx": map[string]interface{}{"messages": userMessages("what the fuck")}},
+		"thradx": map[string]interface{}{"publisherId": "sayhola"},
+	})
+	result := handle(t, module, []openrtb2.Imp{imp})
+	assert.True(t, result.Reject)
+	assert.Equal(t, ContentPolicyViolation, result.NbrCode)
+}
+
+func TestRejectsTopLevelThradxMessages(t *testing.T) {
+	module := testBuilder(t, []string{"fuck"})
+	imp := impWithBidders(map[string]interface{}{
+		"thradx": map[string]interface{}{"publisherId": "sayhola", "messages": userMessages("what the fuck")},
+	})
+	assert.True(t, handle(t, module, []openrtb2.Imp{imp}).Reject)
+}
+
+// Without thradx on the imp, nested tpc params are not scanned — v1-only
+// traffic is filtered exactly as before this change.
+func TestNestedTpcIgnoredWithoutThradx(t *testing.T) {
+	module := testBuilder(t, []string{"fuck"})
+	imp := impWithBidders(map[string]interface{}{
+		"tpc":   map[string]interface{}{"thradx": map[string]interface{}{"messages": userMessages("what the fuck")}},
+		"thrad": map[string]interface{}{"publisherId": "sayhola", "messages": userMessages("clean")},
+	})
+	assert.False(t, handle(t, module, []openrtb2.Imp{imp}).Reject)
+}

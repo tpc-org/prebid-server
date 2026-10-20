@@ -1,0 +1,68 @@
+{
+  "mockBidRequest": {
+    "id": "req-4",
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "publisherId": "sayhola"
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrad.ai/api/v2/bid-request",
+        "body": {
+          "version": "2.0",
+          "id": "req-4",
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "formats": [
+                {
+                  "type": "card",
+                  "assets": {
+                    "title": {
+                      "max_chars": 80
+                    },
+                    "description": {
+                      "max_chars": 100
+                    },
+                    "image": {}
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 401,
+        "body": {
+          "error": {
+            "code": "invalid_api_key",
+            "message": "bad key"
+          }
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [],
+  "expectedMakeBidsErrors": [
+    {
+      "value": "thradx: unexpected status code 401: invalid_api_key: bad key",
+      "comparison": "literal"
+    }
+  ]
+}

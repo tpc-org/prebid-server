@@ -80,27 +80,55 @@ func (m Module) HandleProcessedAuctionHook(
 		if prebid == nil {
 			continue
 		}
-		raw, ok := prebid.Bidder["thrad"]
-		if !ok {
-			continue
-		}
+		for _, raw := range thradMessageSources(prebid.Bidder) {
+			var params thradBidderParams
+			if err := json.Unmarshal(raw, &params); err != nil {
+				continue
+			}
 
-		var params thradBidderParams
-		if err := json.Unmarshal(raw, &params); err != nil {
-			continue
-		}
-
-		for _, message := range params.Messages {
-			if m.containsBannedWord(message.Content) {
-				result.Reject = true
-				result.NbrCode = ContentPolicyViolation
-				result.Message = "rejected: conversation content matched the profanity filter"
-				return result, nil
+			for _, message := range params.Messages {
+				if m.containsBannedWord(message.Content) {
+					result.Reject = true
+					result.NbrCode = ContentPolicyViolation
+					result.Message = "rejected: conversation content matched the profanity filter"
+					return result, nil
+				}
 			}
 		}
 	}
 
 	return result, nil
+}
+
+// thradMessageSources returns every bidder-params blob that can carry Thrad
+// conversation text on an imp: v1 "thrad", the protocol v2 test bidder
+// "thradx", and — for thradx only — the copies nested under the tpc
+// wrapper's own params (ext.prebid.bidder.tpc.thradx / .thrad).
+//
+// The nested copies matter because thradx's top-level messages are filled
+// in by tpc.paramfanout, and hooks in one execution-plan group run in
+// parallel on the same input payload (hooks/hookexecution/execution.go), so
+// this hook never sees paramfanout's changes. Only scanned when the imp
+// carries thradx, so v1-only traffic is checked exactly as before.
+func thradMessageSources(bidder map[string]json.RawMessage) []json.RawMessage {
+	var sources []json.RawMessage
+	if raw, ok := bidder["thrad"]; ok {
+		sources = append(sources, raw)
+	}
+	raw, ok := bidder["thradx"]
+	if !ok {
+		return sources
+	}
+	sources = append(sources, raw)
+	var tpc map[string]json.RawMessage
+	if json.Unmarshal(bidder["tpc"], &tpc) == nil {
+		for _, key := range []string{"thradx", "thrad"} {
+			if nested, ok := tpc[key]; ok {
+				sources = append(sources, nested)
+			}
+		}
+	}
+	return sources
 }
 
 func (m Module) containsBannedWord(text string) bool {

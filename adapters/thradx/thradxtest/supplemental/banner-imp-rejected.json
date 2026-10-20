@@ -1,0 +1,25 @@
+{
+  "mockBidRequest": {
+    "id": "req-8",
+    "imp": [
+      {
+        "id": "imp-1",
+        "banner": {
+          "w": 300,
+          "h": 250
+        },
+        "ext": {
+          "bidder": {
+            "publisherId": "sayhola"
+          }
+        }
+      }
+    ]
+  },
+  "expectedMakeRequestsErrors": [
+    {
+      "value": "thradx: imp imp-1 has no native object (only native is supported)",
+      "comparison": "literal"
+    }
+  ]
+}

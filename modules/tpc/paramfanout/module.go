@@ -174,6 +174,12 @@ func fanOutMutation(
 				changed = true
 			}
 		}
+		if raw, ok := impPrebid.Bidder["thradx"]; ok {
+			if merged, ok := fanOutThradx(raw, tpcRaw, generic); ok {
+				impPrebid.Bidder["thradx"] = merged
+				changed = true
+			}
+		}
 		if raw, ok := impPrebid.Bidder["imprezia"]; ok {
 			if merged, ok := fanOutImprezia(raw, generic); ok {
 				impPrebid.Bidder["imprezia"] = merged
@@ -213,6 +219,85 @@ func fanOutThrad(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage
 	}
 	thrad.UserID = generic.UserID
 	merged, err := json.Marshal(thrad)
+	if err != nil {
+		return raw, false
+	}
+	return merged, true
+}
+
+// fanOutThradx fills in the Thrad protocol v2 test bidder's dynamic fields
+// (adapters/thradx). Unlike v1 "thrad", nothing client-side promotes these
+// to ext.prebid.bidder.thradx — tpcBidAdapter's imp() only knows thrad/
+// gravity/imprezia — but pbsExtensions nests the bundle's whole params
+// object under ext.prebid.bidder.tpc, so the web bundle's Thrad params are
+// already here as tpc.thradx (sayhola's v2 test mode) or tpc.thrad (any
+// bundle that sends v1 params). Server-side/mobile callers' generic block
+// is the last fallback. Same strictly-additive rule as everything else in
+// this module: a field the Stored Imp or request already set is kept.
+//
+// Temporary: removed at the v2 cutover, when the v2 code is renamed back to
+// "thrad" and the bundle's existing promotion feeds it directly again.
+func fanOutThradx(raw, tpcRaw json.RawMessage, generic tpcGenericParams) (json.RawMessage, bool) {
+	var thradx openrtb_ext.ExtImpThrads
+	if err := json.Unmarshal(raw, &thradx); err != nil {
+		return raw, false
+	}
+
+	var src openrtb_ext.ExtImpThrads
+	var nested map[string]json.RawMessage
+	if json.Unmarshal(tpcRaw, &nested) == nil {
+		for _, key := range []string{"thradx", "thrad"} {
+			if b, ok := nested[key]; ok && json.Unmarshal(b, &src) == nil {
+				break
+			}
+			src = openrtb_ext.ExtImpThrads{}
+		}
+	}
+	if src.UserID == "" {
+		src.UserID = generic.UserID
+	}
+	if src.ChatID == "" {
+		src.ChatID = generic.ChatID
+		if src.ChatID == "" {
+			src.ChatID = generic.SessionID
+		}
+	}
+	if len(src.Messages) == 0 {
+		for _, m := range generic.Messages {
+			src.Messages = append(src.Messages, openrtb_ext.ExtImpThradsMsg{Role: m.Role, Content: m.Content})
+		}
+	}
+
+	changed := false
+	if thradx.UserID == "" && src.UserID != "" {
+		thradx.UserID = src.UserID
+		changed = true
+	}
+	if thradx.ChatID == "" && src.ChatID != "" {
+		thradx.ChatID = src.ChatID
+		changed = true
+	}
+	if len(thradx.Messages) == 0 && len(src.Messages) > 0 {
+		thradx.Messages = src.Messages
+		changed = true
+	}
+	if thradx.Summary == "" && src.Summary != "" {
+		thradx.Summary = src.Summary
+		changed = true
+	}
+	if thradx.TurnNumber == nil && src.TurnNumber != nil {
+		thradx.TurnNumber = src.TurnNumber
+		changed = true
+	}
+	if thradx.UserMeta == nil && src.UserMeta != nil {
+		thradx.UserMeta = src.UserMeta
+		changed = true
+	}
+
+	if !changed {
+		return raw, false
+	}
+	merged, err := json.Marshal(thradx)
 	if err != nil {
 		return raw, false
 	}
