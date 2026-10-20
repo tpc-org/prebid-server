@@ -1,10 +1,6 @@
 {
   "mockBidRequest": {
-    "id": "req-2",
-    "test": 1,
-    "site": {
-      "page": "https://chat.sayhola.ai/"
-    },
+    "id": "req-3",
     "imp": [
       {
         "id": "imp-1",
@@ -14,13 +10,7 @@
         },
         "ext": {
           "bidder": {
-            "publisherId": "sayhola",
-            "requestType": "opener",
-            "adFormats": [
-              "sponsored_message"
-            ],
-            "userId": "user-123",
-            "chatId": "chat-456"
+            "publisherId": "drawify"
           }
         }
       }
@@ -32,10 +22,7 @@
         "uri": "https://ssp.thrad.ai/api/v2/bid-request",
         "body": {
           "version": "2.0",
-          "id": "req-2",
-          "context": {
-            "id": "chat-456"
-          },
+          "id": "req-3",
           "opportunities": [
             {
               "id": "imp-1",
@@ -54,21 +41,14 @@
                 }
               ]
             }
-          ],
-          "user": {
-            "id": "user-123"
-          },
-          "surface": {
-            "type": "web",
-            "domain": "chat.sayhola.ai"
-          }
+          ]
         },
         "impIDs": [
           "imp-1"
         ],
         "headers": {
           "Authorization": [
-            "Bearer pk_test_staging"
+            "Bearer pk_drawify_prod"
           ],
           "Content-Type": [
             "application/json"
@@ -79,18 +59,18 @@
         }
       },
       "mockResponse": {
-        "status": 200,
+        "status": 400,
         "body": {
-          "version": "2.0",
-          "id": "req-2",
-          "currency": "USD",
-          "opportunities": [
-            {
-              "id": "imp-1",
-              "bids": [],
-              "no_bid_reason": "no_fill"
-            }
-          ]
+          "error": {
+            "code": "invalid_request",
+            "message": "Request failed validation",
+            "fields": [
+              {
+                "path": "device.ip",
+                "message": "must be public"
+              }
+            ]
+          }
         }
       }
     }
@@ -98,7 +78,7 @@
   "expectedBidResponses": [],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: no bid for opportunity imp-1: no_fill",
+      "value": "thrad: unexpected status code 400: invalid_request: Request failed validation fields=[{\"path\":\"device.ip\",\"message\":\"must be public\"}]",
       "comparison": "literal"
     }
   ]
