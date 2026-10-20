@@ -11,8 +11,9 @@ import (
 
 func TestJsonSamples(t *testing.T) {
 	bidder, buildErr := Builder(openrtb_ext.BidderThrad, config.Adapter{
-		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
-		ExtraAdapterInfo: `{"productionKey":"pk_test_production","stagingKey":"pk_test_staging"}`,
+		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request",
+		ExtraAdapterInfo: `{"productionKey":"pk_test_production","stagingKey":"pk_test_staging",
+			"publishers":{"drawify":{"productionKey":"pk_drawify_prod","stagingKey":"pk_drawify_staging"}}}`,
 	}, config.Server{})
 
 	if buildErr != nil {
@@ -20,6 +21,15 @@ func TestJsonSamples(t *testing.T) {
 	}
 
 	adapterstest.RunJSONBidderTest(t, "thradtest", bidder)
+}
+
+func TestBuilderRequiresKeys(t *testing.T) {
+	_, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
+		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request",
+	}, config.Server{})
+	if err == nil {
+		t.Fatal("expected an error when extra_info has no keys")
+	}
 }
 
 // TestSelectKeyPerPublisher locks in the per-publisher key selection added for
@@ -35,7 +45,7 @@ func TestSelectKeyPerPublisher(t *testing.T) {
 		}
 	}`
 	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
-		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+		Endpoint:         "https://ssp.thrad.ai/api/v2/bid-request",
 		ExtraAdapterInfo: extra,
 	}, config.Server{})
 	if err != nil {
@@ -81,7 +91,7 @@ func TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction(t *testing.T)
 		}
 	}`
 	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
-		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+		Endpoint:         "https://ssp.thrad.ai/api/v2/bid-request",
 		ExtraAdapterInfo: extra,
 	}, config.Server{})
 	if err != nil {
@@ -104,7 +114,7 @@ func TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction(t *testing.T)
 // pbs.yaml itself is edited to add per-publisher entries.
 func TestBuilderAcceptsLegacyFlatExtraInfo(t *testing.T) {
 	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
-		Endpoint:         "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+		Endpoint:         "https://ssp.thrad.ai/api/v2/bid-request",
 		ExtraAdapterInfo: `{"productionKey":"pk_live_xxx","stagingKey":"pk_staging_yyy"}`,
 	}, config.Server{})
 	if err != nil {

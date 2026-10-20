@@ -1,6 +1,6 @@
 {
   "mockBidRequest": {
-    "id": "req-3",
+    "id": "req-4",
     "imp": [
       {
         "id": "imp-1",
@@ -10,7 +10,7 @@
         },
         "ext": {
           "bidder": {
-            "publisherId": "drawify"
+            "publisherId": "sayhola"
           }
         }
       }
@@ -22,7 +22,7 @@
         "uri": "https://ssp.thrad.ai/api/v2/bid-request",
         "body": {
           "version": "2.0",
-          "id": "req-3",
+          "id": "req-4",
           "opportunities": [
             {
               "id": "imp-1",
@@ -45,31 +45,14 @@
         },
         "impIDs": [
           "imp-1"
-        ],
-        "headers": {
-          "Authorization": [
-            "Bearer pk_drawify_prod"
-          ],
-          "Content-Type": [
-            "application/json"
-          ],
-          "Accept": [
-            "application/json"
-          ]
-        }
+        ]
       },
       "mockResponse": {
-        "status": 400,
+        "status": 401,
         "body": {
           "error": {
-            "code": "invalid_request",
-            "message": "Request failed validation",
-            "fields": [
-              {
-                "path": "device.ip",
-                "message": "must be public"
-              }
-            ]
+            "code": "invalid_api_key",
+            "message": "bad key"
           }
         }
       }
@@ -78,7 +61,7 @@
   "expectedBidResponses": [],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: unexpected status code 400: invalid_request: Request failed validation fields=[{\"path\":\"device.ip\",\"message\":\"must be public\"}]",
+      "value": "thrad: unexpected status code 401: invalid_api_key: bad key",
       "comparison": "literal"
     }
   ]
