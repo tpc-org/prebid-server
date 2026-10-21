@@ -46,14 +46,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"text/template"
 
+	"github.com/prebid/openrtb/v20/adcom1"
 	"github.com/prebid/openrtb/v20/openrtb2"
 	"github.com/prebid/prebid-server/v4/adapters"
 	"github.com/prebid/prebid-server/v4/config"
 	"github.com/prebid/prebid-server/v4/errortypes"
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
+	"golang.org/x/text/language"
 )
 
 // ── Config types ──────────────────────────────────────────────────────────────
@@ -312,19 +315,21 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 			if request.Device.UA != "" {
 				headers.Set("User-Agent", request.Device.UA)
 			}
-			if request.Device.Geo != nil && request.Device.Geo.Country != "" {
-				headers.Set("X-User-Country", request.Device.Geo.Country)
-				switch request.Device.DeviceType {
-				case 1, 4, 5: // phone, tablet, connected device
-					headers.Set("X-User-Device", "mobile")
-				default:
-					headers.Set("X-User-Device", "desktop")
+			// Device class is sent whenever it's known, not only alongside a
+			// geo country as before: app traffic (e.g. Gravity resale) often
+			// has no device.geo, and previously got no device signal at all.
+			if class := userDeviceClass(request.Device.DeviceType, request.Device.UA); class != "" {
+				headers.Set("X-User-Device", class)
+			}
+			if geo := request.Device.Geo; geo != nil {
+				if country := alpha2Country(geo.Country); country != "" {
+					headers.Set("X-User-Country", country)
 				}
-				if request.Device.Geo.Region != "" {
-					headers.Set("X-User-Region", request.Device.Geo.Region)
+				if geo.Region != "" {
+					headers.Set("X-User-Region", geo.Region)
 				}
-				if request.Device.Geo.City != "" {
-					headers.Set("X-User-City", request.Device.Geo.City)
+				if geo.City != "" {
+					headers.Set("X-User-City", geo.City)
 				}
 			}
 		}
@@ -339,6 +344,47 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 	}
 
 	return requests, errs
+}
+
+// userDeviceClass maps OpenRTB devicetype onto Thrad v1's X-User-Device
+// ("mobile" or "desktop"), falling back to the user agent when devicetype is
+// unset. Returns "" when unknown rather than guessing "desktop" (the previous
+// default, which mislabelled app traffic without a devicetype). Tablets count
+// as mobile; CTV/set-top boxes have no v1 equivalent.
+func userDeviceClass(dt adcom1.DeviceType, ua string) string {
+	switch dt {
+	case adcom1.DeviceMobile, adcom1.DevicePhone, adcom1.DeviceTablet:
+		return "mobile"
+	case adcom1.DevicePC:
+		return "desktop"
+	case adcom1.DeviceTV, adcom1.DeviceConnected, adcom1.DeviceSetTopBox:
+		return ""
+	}
+	switch {
+	case ua == "":
+		return ""
+	case strings.Contains(ua, "Mobi") || strings.Contains(ua, "Android") ||
+		strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") || strings.Contains(ua, "iPod"):
+		return "mobile"
+	case strings.Contains(ua, "Windows") || strings.Contains(ua, "Macintosh") ||
+		strings.Contains(ua, "CrOS") || strings.Contains(ua, "X11"):
+		return "desktop"
+	}
+	return ""
+}
+
+// alpha2Country converts OpenRTB's alpha-3 device.geo.country (or an alpha-2
+// value some callers send) to an uppercase alpha-2 code; anything that isn't
+// a real country is dropped.
+func alpha2Country(code string) string {
+	if code == "" {
+		return ""
+	}
+	r, err := language.ParseRegion(code)
+	if err != nil || !r.IsCountry() {
+		return ""
+	}
+	return r.String()
 }
 
 // MakeBids translates the Thrad API response back into an OpenRTB BidderResponse.
