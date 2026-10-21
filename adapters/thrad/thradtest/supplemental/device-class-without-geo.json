@@ -1,0 +1,88 @@
+{
+  "mockBidRequest": {
+    "id": "test-request-id",
+    "app": {
+      "bundle": "com.example.chat"
+    },
+    "device": {
+      "ip": "8.8.8.8",
+      "ua": "AcmeChat/4.2 (iPhone; iOS 18.0)"
+    },
+    "imp": [
+      {
+        "id": "test-imp-id",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":300,\"hmin\":200}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "userId": "user-123",
+            "chatId": "chat-456",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello world",
+                "timestamp": "2024-01-01T00:00:00Z"
+              }
+            ],
+            "requestType": "contextual",
+            "adFormats": [
+              "sponsored_message"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://ssp.thrads.ai/api/v1/ssp/bid-request",
+        "headers": {
+          "Content-Type": [
+            "application/json;charset=utf-8"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "Thrad-Api-Key": [
+            "pk_test_production"
+          ],
+          "X-Forwarded-For": [
+            "8.8.8.8"
+          ],
+          "User-Agent": [
+            "AcmeChat/4.2 (iPhone; iOS 18.0)"
+          ],
+          "X-User-Device": [
+            "mobile"
+          ]
+        },
+        "body": {
+          "userId": "user-123",
+          "chatId": "chat-456",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello world",
+              "timestamp": "2024-01-01T00:00:00Z"
+            }
+          ],
+          "request_type": "contextual",
+          "ad_formats": [
+            "sponsored_message"
+          ]
+        },
+        "impIDs": [
+          "test-imp-id"
+        ]
+      },
+      "mockResponse": {
+        "status": 204,
+        "body": ""
+      }
+    }
+  ],
+  "expectedBidResponses": []
+}
