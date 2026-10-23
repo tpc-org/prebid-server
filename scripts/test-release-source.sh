@@ -21,4 +21,6 @@ echo extra > extra.go
 if sh "$check" "$revision" 2>/dev/null; then exit 1; fi
 rm extra.go
 sh "$check" "$revision"
-echo 'PASS: clean source accepted; wrong revision, tracked edits and untracked source rejected'
+printf corrupt > .git/index
+if sh "$check" "$revision" 2>/dev/null; then exit 1; fi
+echo 'PASS: clean source accepted; wrong revision, tracked edits, untracked source and broken Git index rejected'
