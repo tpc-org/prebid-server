@@ -49,6 +49,28 @@ import (
 	jsonpatch "gopkg.in/evanphx/json-patch.v5"
 )
 
+func loadTestBidderInfo() (config.BidderInfos, error) {
+	infos, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	if err != nil {
+		return nil, err
+	}
+	// Enabled TPC builders require credentials even when tests never contact demand.
+	for bidder, extraInfo := range map[string]string{
+		"thrad":    `{"productionKey":"test-production-key"}`,
+		"thradx":   `{"productionKey":"test-production-key"}`,
+		"gravity":  `{"apiKey":"test-api-key"}`,
+		"imprezia": `{"apiKey":"test-api-key"}`,
+	} {
+		info, ok := infos[bidder]
+		if !ok {
+			return nil, fmt.Errorf("missing bidder info for %s", bidder)
+		}
+		info.ExtraAdapterInfo = extraInfo
+		infos[bidder] = info
+	}
+	return infos, nil
+}
+
 func TestNewExchange(t *testing.T) {
 	respStatus := 200
 	respBody := "{\"bid\":false}"
@@ -66,7 +88,7 @@ func TestNewExchange(t *testing.T) {
 		},
 	}
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1222,7 +1244,7 @@ func TestGetBidCacheInfoEndToEnd(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handlerNoBidServer))
 	defer server.Close()
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1581,7 +1603,7 @@ func TestBidResponseCurrency(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handlerNoBidServer))
 	defer server.Close()
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1813,7 +1835,7 @@ func TestRaceIntegration(t *testing.T) {
 
 	cfg := &config.Configuration{}
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1921,7 +1943,7 @@ func TestPanicRecovery(t *testing.T) {
 		},
 	}
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1987,7 +2009,7 @@ func TestPanicRecoveryHighLevel(t *testing.T) {
 
 	cfg := &config.Configuration{}
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4554,7 +4576,7 @@ func TestPassExperimentConfigsToHoldAuction(t *testing.T) {
 
 	cfg := &config.Configuration{}
 
-	biddersInfo, err := config.LoadBidderInfoFromDisk("../static/bidder-info")
+	biddersInfo, err := loadTestBidderInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
