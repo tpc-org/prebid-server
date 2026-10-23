@@ -23,27 +23,20 @@ RUN apt-get update && \
 # CGO must be enabled because some modules depend on native C code
 ENV CGO_ENABLED 1
 COPY ./ ./
-RUN go mod tidy
 RUN go mod vendor
 ARG TEST="true"
 RUN if [ "$TEST" != "false" ]; then ./validate.sh ; fi
 
-# VERSION/REVISION are computed by the caller (deploy.sh, in the pbs-settings
-# repo) from the already-checked-out source *outside* this build, and passed
-# in as --build-arg — not shelled out to git inside this RUN step. That used
-# to run `git describe --tags`/`git rev-parse HEAD` directly here, which
-# depends on .git surviving intact into the Docker build context; on this
-# fork's deploy hosts that's been unreliable (git commands failing outright
-# on one region, silently resolving to a stale/wrong commit on the other —
-# see docs/integration/test-bidder-plan.md's "Known gaps" for the
-# investigation). Defaults to empty strings so a plain `docker build` with no
-# build-args (e.g. a local dev build) still succeeds, just without embedded
-# version info.
+# Release contexts must include a clean clone's .git, not a stale host checkout.
+# Empty revision still permits unversioned development builds.
 ARG VERSION=""
 ARG REVISION=""
-RUN go build -mod=vendor -ldflags "-X github.com/prebid/prebid-server/v4/version.Ver=${VERSION} -X github.com/prebid/prebid-server/v4/version.Rev=${REVISION}" .
+RUN if [ -n "$REVISION" ]; then sh scripts/check-release-source.sh "$REVISION"; fi && \
+    go build -mod=vendor -ldflags "-X github.com/prebid/prebid-server/v4/version.Ver=${VERSION} -X github.com/prebid/prebid-server/v4/version.Rev=${REVISION}" .
 
 FROM ${BASE_IMAGE} AS release
+ARG REVISION=""
+LABEL org.opencontainers.image.revision="${REVISION}"
 LABEL maintainer="hans.hjort@xandr.com" 
 WORKDIR /usr/local/bin/
 COPY --from=build /app/prebid-server .

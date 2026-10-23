@@ -28,6 +28,7 @@ jobs:
 
     - name: Validate
       run: |
+        sh scripts/test-release-source.sh
         ./validate.sh --nofmt --cov --race 10
       env:
         GO111MODULE: "on"
