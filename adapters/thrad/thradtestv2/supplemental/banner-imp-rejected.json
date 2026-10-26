@@ -18,7 +18,7 @@
   },
   "expectedMakeRequestsErrors": [
     {
-      "value": "thradx: imp imp-1 has no native object (only native is supported)",
+      "value": "thrad: imp imp-1 has no native object (only native is supported)",
       "comparison": "literal"
     }
   ]

@@ -1,20 +1,7 @@
-# Thrad protocol v2 (docs.thrad.ai/api/api-reference/bid-request-v2), run
-# side by side with the v1 "thrad" bidder for testing. At cutover this code
-# replaces adapters/thrad and the bidder is renamed back to "thrad" — see
-# adapters/thradx/thradx.go's package doc.
-#
-# Enabled 2026-10-20, step 3 of the 3-step new-bidder rollout (deploy
-# disabled → deploy pbs-settings' adapters.thradx.extra_info → deploy
-# enabled). pbs-settings 25e93fc carries that extra_info (staging key only)
-# on both regions. Enabling does not touch live traffic: only the test-only
-# Stored Imp sayhola-767d5762 references thradx.
-endpoint: "https://ssp.thrad.ai/api/v2/bid-request"
-maintainer:
-  email: "prebid@tpcsrv.com"
-capabilities:
-  site:
-    mediaTypes:
-      - native
-  app:
-    mediaTypes:
-      - native
+# Temporary alias kept after the Thrad v2 cutover so the test-only Stored
+# Imp sayhola-767d5762 (bidder "thradx") keeps resolving. Runs the same v2
+# code as "thrad", but with its own pbs.yaml adapters.thradx.extra_info
+# (staging key only). Remove after cleanup: delete this file, the test
+# Stored Imp, adapters.thradx in pbs-settings, and the thradx branches in
+# modules/tpc/paramfanout and profanityfilter — disabled-first order.
+aliasOf: "thrad"

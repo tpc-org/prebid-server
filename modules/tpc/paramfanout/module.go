@@ -132,9 +132,58 @@ func anyImpHasGenericBlock(req *openrtb_ext.RequestWrapper) bool {
 			if _, ok := prebid.Bidder["tpc"]; ok {
 				return true
 			}
+			if needsPlacementID(prebid) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// thradBidders are the bidder keys whose params get a placementId — see
+// fillThradPlacementID.
+var thradBidders = []string{"thrad", "thradx"}
+
+// needsPlacementID reports whether an imp came from a Stored Imp and carries a
+// Thrad bidder block, i.e. fillThradPlacementID has something to do even when
+// the request has no generic tpc block (e.g. dsp-connector's requests).
+func needsPlacementID(prebid *openrtb_ext.ExtImpPrebid) bool {
+	if prebid.StoredRequest == nil || prebid.StoredRequest.ID == "" {
+		return false
+	}
+	for _, b := range thradBidders {
+		if _, ok := prebid.Bidder[b]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// fillThradPlacementID copies the imp's Stored Imp id into Thrad's
+// placementId, which the thrad adapter sends to Thrad v2 as
+// opportunities[].id — Thrad stores that as the placement in its reporting,
+// and Stored Imp ids are our stable per-placement identifiers. PBS strips
+// ext.prebid.storedrequest before calling adapters, so this is the only place
+// the id is still visible. A placementId already set (e.g. in the Stored Imp)
+// is kept.
+func fillThradPlacementID(raw json.RawMessage, storedImpID string) (json.RawMessage, bool) {
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &params); err != nil || params == nil {
+		return raw, false
+	}
+	if existing, ok := params["placementId"]; ok && string(existing) != `""` && string(existing) != "null" {
+		return raw, false
+	}
+	id, err := json.Marshal(storedImpID)
+	if err != nil {
+		return raw, false
+	}
+	params["placementId"] = id
+	merged, err := json.Marshal(params)
+	if err != nil {
+		return raw, false
+	}
+	return merged, true
 }
 
 // fanOutMutation is the ChangeSet mutation applied to every imp on the
@@ -158,16 +207,29 @@ func fanOutMutation(
 			continue
 		}
 
-		tpcRaw, ok := impPrebid.Bidder["tpc"]
-		if !ok {
-			continue // no generic block on this imp — nothing to fan out
-		}
-		var generic tpcGenericParams
-		if err := json.Unmarshal(tpcRaw, &generic); err != nil {
-			continue // malformed generic block — leave everything else alone
+		changed := false
+		if needsPlacementID(impPrebid) {
+			for _, b := range thradBidders {
+				if raw, ok := impPrebid.Bidder[b]; ok {
+					if merged, ok := fillThradPlacementID(raw, impPrebid.StoredRequest.ID); ok {
+						impPrebid.Bidder[b] = merged
+						changed = true
+					}
+				}
+			}
 		}
 
-		changed := false
+		tpcRaw, ok := impPrebid.Bidder["tpc"]
+		var generic tpcGenericParams
+		if !ok || json.Unmarshal(tpcRaw, &generic) != nil {
+			// No (or a malformed) generic block on this imp — nothing to fan
+			// out beyond the placementId above.
+			if changed {
+				impExt.SetPrebid(impPrebid)
+			}
+			continue
+		}
+
 		if raw, ok := impPrebid.Bidder["thrad"]; ok {
 			if merged, ok := fanOutThrad(raw, generic); ok {
 				impPrebid.Bidder["thrad"] = merged

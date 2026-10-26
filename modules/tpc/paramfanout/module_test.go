@@ -292,3 +292,70 @@ func TestFanOutThradxNeverOverwrites(t *testing.T) {
 	assert.Equal(t, "already", thradx["userId"])
 	assert.Equal(t, "already", thradx["chatId"])
 }
+
+func buildStoredImpRequest(t *testing.T, storedImpID string, bidders map[string]json.RawMessage) *openrtb_ext.RequestWrapper {
+	t.Helper()
+	prebid := map[string]interface{}{"bidder": bidders}
+	if storedImpID != "" {
+		prebid["storedrequest"] = map[string]string{"id": storedImpID}
+	}
+	extBytes, err := json.Marshal(map[string]interface{}{"prebid": prebid})
+	require.NoError(t, err)
+	rw := &openrtb_ext.RequestWrapper{BidRequest: &openrtb2.BidRequest{Imp: []openrtb2.Imp{{ID: "1", Ext: extBytes}}}}
+	require.NoError(t, rw.RebuildRequest())
+	return rw
+}
+
+// Thrad v2 reports opportunities[].id as the placement; the adapter takes it
+// from placementId, filled here from the Stored Imp id. Works without a
+// generic tpc block (dsp-connector requests have none).
+func TestFillsThradPlacementIDFromStoredImp(t *testing.T) {
+	rw := buildStoredImpRequest(t, "sayhola-9243e9b6", map[string]json.RawMessage{
+		"thrad":    mustJSON(t, map[string]interface{}{"publisherId": "sayhola", "protocol": 2}),
+		"thradx":   mustJSON(t, map[string]interface{}{"publisherId": "sayhola"}),
+		"imprezia": mustJSON(t, map[string]interface{}{"siteId": "s"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thrad := bidderExt(t, rw, "thrad")
+	assert.Equal(t, "sayhola-9243e9b6", thrad["placementId"])
+	assert.Equal(t, float64(2), thrad["protocol"], "other params untouched")
+	assert.Equal(t, "sayhola-9243e9b6", bidderExt(t, rw, "thradx")["placementId"])
+	assert.NotContains(t, bidderExt(t, rw, "imprezia"), "placementId", "only Thrad bidders get it")
+}
+
+func TestKeepsExplicitThradPlacementID(t *testing.T) {
+	rw := buildStoredImpRequest(t, "sayhola-9243e9b6", map[string]json.RawMessage{
+		"thrad": mustJSON(t, map[string]interface{}{"publisherId": "sayhola", "placementId": "chosen"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	assert.Equal(t, "chosen", bidderExt(t, rw, "thrad")["placementId"])
+}
+
+func TestNoPlacementIDWithoutStoredImp(t *testing.T) {
+	rw := buildStoredImpRequest(t, "", map[string]json.RawMessage{
+		"thrad": mustJSON(t, map[string]interface{}{"publisherId": "sayhola"}),
+	})
+
+	result := run(t, Module{enabled: true}, rw)
+
+	assert.NotContains(t, bidderExt(t, rw, "thrad"), "placementId")
+	assert.Empty(t, result.ChangeSet.Mutations(), "no Stored Imp and no tpc block: hook registers nothing")
+}
+
+// The web-bundle case: generic fan-out and placementId in the same pass.
+func TestPlacementIDAlongsideGenericFanOut(t *testing.T) {
+	rw := buildStoredImpRequest(t, "promptessor-bfc732a4", map[string]json.RawMessage{
+		"tpc":   mustJSON(t, map[string]interface{}{"userId": "u1"}),
+		"thrad": mustJSON(t, map[string]interface{}{"publisherId": "promptessor"}),
+	})
+
+	run(t, Module{enabled: true}, rw)
+
+	thrad := bidderExt(t, rw, "thrad")
+	assert.Equal(t, "promptessor-bfc732a4", thrad["placementId"])
+	assert.Equal(t, "u1", thrad["userId"])
+}

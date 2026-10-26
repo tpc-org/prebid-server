@@ -38,7 +38,7 @@
           },
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola",
               "formats": [
                 {
                   "type": "card",
@@ -98,7 +98,7 @@
   "expectedBidResponses": [],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: no bid for opportunity imp-1: no_fill",
+      "value": "thrad: no bid for opportunity imp-1: no_fill",
       "comparison": "literal"
     }
   ]

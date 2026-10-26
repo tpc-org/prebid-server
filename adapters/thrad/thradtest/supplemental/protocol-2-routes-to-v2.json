@@ -1,6 +1,6 @@
 {
   "mockBidRequest": {
-    "id": "req-4",
+    "id": "req-2",
     "imp": [
       {
         "id": "imp-1",
@@ -10,7 +10,9 @@
         },
         "ext": {
           "bidder": {
-            "publisherId": "sayhola"
+            "publisherId": "sayhola",
+            "protocol": 2,
+            "placementId": "sayhola-9243e9b6"
           }
         }
       }
@@ -22,10 +24,10 @@
         "uri": "https://ssp.thrad.ai/api/v2/bid-request",
         "body": {
           "version": "2.0",
-          "id": "req-4",
+          "id": "req-2",
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola-9243e9b6",
               "formats": [
                 {
                   "type": "card",
@@ -45,24 +47,35 @@
         },
         "impIDs": [
           "imp-1"
-        ]
+        ],
+        "headers": {
+          "Authorization": [
+            "Bearer pk_test_production"
+          ],
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ]
+        }
       },
       "mockResponse": {
-        "status": 401,
+        "status": 200,
         "body": {
-          "error": {
-            "code": "invalid_api_key",
-            "message": "bad key"
-          }
+          "version": "2.0",
+          "id": "req-2",
+          "currency": "USD",
+          "opportunities": [
+            {
+              "id": "imp-1",
+              "bids": [],
+              "no_bid_reason": "frequency_capped"
+            }
+          ]
         }
       }
     }
   ],
-  "expectedBidResponses": [],
-  "expectedMakeBidsErrors": [
-    {
-      "value": "thradx: unexpected status code 401: invalid_api_key: bad key",
-      "comparison": "literal"
-    }
-  ]
+  "expectedBidResponses": []
 }

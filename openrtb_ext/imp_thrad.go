@@ -13,6 +13,18 @@ type ExtImpThrads struct {
 	// for it, the adapter falls back to extra_info's top-level default key pair.
 	PublisherID string `json:"publisherId,omitempty"`
 
+	// Protocol selects Thrad's bid request protocol for this placement: 2
+	// (v2) or 1/unset (v1, the default until the cutover; the "thradx" alias
+	// defaults to 2). Static, set in the Stored Imp — lets placements move
+	// to v2 one at a time. Remove once v1 is gone.
+	Protocol int `json:"protocol,omitempty"`
+
+	// PlacementID is a stable placement identifier sent to Thrad v2 as
+	// opportunities[].id, which Thrad stores as the placement in its
+	// reporting. Filled automatically from the Stored Imp id by the
+	// tpc.paramfanout module; a Stored Imp may also set it explicitly.
+	PlacementID string `json:"placementId,omitempty"`
+
 	// RequestType is "contextual" (default) or "opener".
 	RequestType string `json:"requestType,omitempty"`
 

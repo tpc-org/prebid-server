@@ -25,7 +25,7 @@
           "id": "req-3",
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "drawify",
               "formats": [
                 {
                   "type": "card",
@@ -78,7 +78,7 @@
   "expectedBidResponses": [],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: unexpected status code 400: invalid_request: Request failed validation fields=[{\"path\":\"device.ip\",\"message\":\"must be public\"}]",
+      "value": "thrad: unexpected status code 400: invalid_request: Request failed validation fields=[{\"path\":\"device.ip\",\"message\":\"must be public\"}]",
       "comparison": "literal"
     }
   ]

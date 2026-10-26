@@ -25,7 +25,7 @@
           "id": "req-7",
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola",
               "formats": [
                 {
                   "type": "card",
@@ -115,11 +115,11 @@
   ],
   "expectedMakeBidsErrors": [
     {
-      "value": "thradx: bid b7: unknown tracker event \"hovered\", not fired",
+      "value": "thrad: bid b7: unknown tracker event \"hovered\", not fired",
       "comparison": "literal"
     },
     {
-      "value": "thradx: bid b7: unsupported tracker method \"js\" for viewable event, not fired",
+      "value": "thrad: bid b7: unsupported tracker method \"js\" for viewable event, not fired",
       "comparison": "literal"
     }
   ]

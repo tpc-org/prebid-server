@@ -1,39 +1,11 @@
-package thradx
+package thrad
 
-// Package thradx implements Thrad's bid request protocol v2
-// (docs.thrad.ai/api/api-reference/bid-request-v2), running side by side
-// with the v1 "thrad" adapter while v2 is tested. Thrad is retiring v1.
+// ── Protocol v2 (ssp.thrad.ai/api/v2/bid-request) ──────────────────────────────
 //
-// ── Lifecycle: thradx is temporary by design ─────────────────────────────────
+// Thrad's current protocol (docs.thrad.ai/api/api-reference/bid-request-v2),
+// validated on the test-only thradx placement before going live.
 //
-// The dashboard keys reporting, provisioning and placement sync on the
-// literal bidder code "thrad", so live Stored Imps are never switched to
-// "thradx". Instead:
-//
-//  1. Test: a test-only Stored Imp references "thradx"; everything live
-//     stays on v1 "thrad".
-//  2. Cutover = rename: this package's code replaces adapters/thrad, the
-//     bidder code goes back to "thrad", and "thradx" is kept briefly as an
-//     alias so the test Stored Imp keeps resolving. One prebid-server deploy,
-//     reverted by reverting that one commit.
-//  3. Cleanup: drop the alias, the test Stored Imp and adapters.thradx.
-//
-// To keep step 2 a pure code move, this adapter deliberately reuses v1's
-// imp params type (openrtb_ext.ExtImpThrads), bidder-params schema shape and
-// pbs.yaml extra_info key layout (per-publisher key pairs, test=1 → staging
-// key — see selectKey). Nothing a Stored Imp or the bundle sends has to
-// change at cutover.
-//
-// ── Where the dynamic params come from ───────────────────────────────────────
-//
-// v1 receives its per-auction userId/chatId/messages at
-// ext.prebid.bidder.thrad, promoted there by tpcBidAdapter's imp()
-// converter. thradx has no such client-side promotion; the
-// tpc.paramfanout module fills ext.prebid.bidder.thradx's dynamic fields
-// server-side (see fanOutThradx). After cutover the code is back under
-// "thrad" and the bundle's existing promotion feeds it directly again.
-//
-// ── Request mapping (v1 field → v2) ──────────────────────────────────────────
+// Request mapping (v1 field → v2):
 //
 //	chatId              → context.id
 //	messages            → context.chat.messages (ISO 8601 timestamps → Unix seconds)
@@ -60,7 +32,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/prebid/openrtb/v20/adcom1"
@@ -69,23 +40,10 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/prebid/prebid-server/v4/adapters"
-	"github.com/prebid/prebid-server/v4/config"
 	"github.com/prebid/prebid-server/v4/errortypes"
 	"github.com/prebid/prebid-server/v4/macros"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 )
-
-// ── Config types (identical layout to v1's adapters.thrad.extra_info) ─────────
-
-type publisherKeys struct {
-	ProductionKey string `json:"productionKey"`
-	StagingKey    string `json:"stagingKey"`
-}
-
-type extraInfo struct {
-	publisherKeys
-	Publishers map[string]publisherKeys `json:"publishers"`
-}
 
 // ── Thrad v2 request types ────────────────────────────────────────────────────
 
@@ -213,10 +171,11 @@ type v2Bid struct {
 	Format     string       `json:"format"`
 	Assets     v2BidAssets  `json:"assets"`
 	Actions    v2Actions    `json:"actions"`
-	// WinURL/LossURL are auction notices. Not fired yet — Thrad says they're
-	// only needed "if you run your own auction"; asked them whether that
-	// applies to our PBS auction. WinURL is carried on bid.burl, which this
-	// PBS fork does not fire, so it's inert until that's decided.
+	// WinURL/LossURL are auction notices; Thrad asks for both because our
+	// PBS auction is multi-bidder. WinURL rides on bid.burl (Prebid core
+	// fires it on render). LossURL rides on bid.lurl and the native adm's
+	// ext.thrad.lossUrl, which the client bundle fires with
+	// ${AUCTION_LOSS} replaced when this bid loses the slot.
 	WinURL  string `json:"win_url"`
 	LossURL string `json:"loss_url"`
 }
@@ -255,128 +214,48 @@ type v2ErrorBody struct {
 	Fields  json.RawMessage `json:"fields"`
 }
 
-// ── Adapter ───────────────────────────────────────────────────────────────────
-
-type adapter struct {
-	endpoint *template.Template
-	keys     extraInfo
-}
-
-// Builder is the constructor registered with PBS.
-func Builder(bidderName openrtb_ext.BidderName, cfg config.Adapter, server config.Server) (adapters.Bidder, error) {
-	tmpl, err := template.New("endpointTemplate").Parse(cfg.Endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("thradx: unable to parse endpoint template: %w", err)
-	}
-
-	a := &adapter{endpoint: tmpl}
-
-	if cfg.ExtraAdapterInfo != "" {
-		if err := json.Unmarshal([]byte(cfg.ExtraAdapterInfo), &a.keys); err != nil {
-			return nil, fmt.Errorf("thradx: unable to parse extra_info: %w", err)
+// makeRequestV2 builds one v2 call for one imp. v2 only auctions the first
+// opportunity in a request, so imps are never batched.
+func (a *adapter) makeRequestV2(request *openrtb2.BidRequest, imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) (*adapters.RequestData, error) {
+	if imp.Native == nil {
+		return nil, &errortypes.BadInput{
+			Message: fmt.Sprintf("thrad: imp %s has no native object (only native is supported)", imp.ID),
 		}
 	}
-	if a.keys.ProductionKey == "" && a.keys.StagingKey == "" && len(a.keys.Publishers) == 0 {
-		return nil, fmt.Errorf("thradx: extra_info must contain productionKey/stagingKey and/or a publishers map")
-	}
-
-	return a, nil
-}
-
-// selectKey is v1's key selection, unchanged (Thrad: "same API key" on v2) —
-// see adapters/thrad's selectKey for the reasoning behind each fallback.
-func (a *adapter) selectKey(request *openrtb2.BidRequest, publisherID string) string {
-	keys := a.keys.publisherKeys
-	if publisherID != "" {
-		if pk, ok := a.keys.Publishers[publisherID]; ok {
-			keys = pk
-		}
-	}
-	if request.Test == 1 && keys.StagingKey != "" {
-		return keys.StagingKey
-	}
-	if keys.ProductionKey != "" {
-		return keys.ProductionKey
-	}
-	if a.keys.publisherKeys.ProductionKey != "" {
-		return a.keys.publisherKeys.ProductionKey
-	}
-	return keys.StagingKey
-}
-
-// MakeRequests sends one v2 request per imp. v2 only auctions the first
-// opportunity in a request, so imps can't be batched.
-func (a *adapter) MakeRequests(request *openrtb2.BidRequest, _ *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	var requests []*adapters.RequestData
-	var errs []error
-
-	endpointStr, err := macros.ResolveMacros(a.endpoint, macros.EndpointTemplateParams{})
+	endpointStr, err := macros.ResolveMacros(a.v2Endpoint, macros.EndpointTemplateParams{})
 	if err != nil {
-		return nil, []error{fmt.Errorf("thradx: failed to resolve endpoint: %w", err)}
+		return nil, fmt.Errorf("thrad: failed to resolve endpoint: %w", err)
 	}
 
 	device := buildDevice(request.Device)
-	surface := buildSurface(request, device)
-	privacy := buildPrivacy(request)
-
-	for i := range request.Imp {
-		imp := request.Imp[i]
-
-		var bidderExt adapters.ExtImpBidder
-		if err := json.Unmarshal(imp.Ext, &bidderExt); err != nil {
-			errs = append(errs, &errortypes.BadInput{
-				Message: fmt.Sprintf("thradx: invalid imp.ext for imp %s: %s", imp.ID, err),
-			})
-			continue
-		}
-
-		var params openrtb_ext.ExtImpThrads
-		if err := json.Unmarshal(bidderExt.Bidder, &params); err != nil {
-			errs = append(errs, &errortypes.BadInput{
-				Message: fmt.Sprintf("thradx: invalid imp.ext.bidder for imp %s: %s", imp.ID, err),
-			})
-			continue
-		}
-
-		if imp.Native == nil {
-			errs = append(errs, &errortypes.BadInput{
-				Message: fmt.Sprintf("thradx: imp %s has no native object (only native is supported)", imp.ID),
-			})
-			continue
-		}
-
-		thradReq := v2Request{
-			Version:       "2.0",
-			ID:            request.ID,
-			Context:       buildContext(params),
-			Opportunities: []v2Opportunity{buildOpportunity(imp, params)},
-			User:          buildUser(params),
-			Device:        device,
-			Surface:       surface,
-			Privacy:       mergeUserMetaPrivacy(privacy, params.UserMeta),
-		}
-
-		body, err := json.Marshal(thradReq)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("thradx: failed to marshal request for imp %s: %w", imp.ID, err))
-			continue
-		}
-
-		headers := http.Header{}
-		headers.Set("Content-Type", "application/json")
-		headers.Set("Accept", "application/json")
-		headers.Set("Authorization", "Bearer "+a.selectKey(request, params.PublisherID))
-
-		requests = append(requests, &adapters.RequestData{
-			Method:  http.MethodPost,
-			Uri:     endpointStr,
-			Body:    body,
-			Headers: headers,
-			ImpIDs:  []string{imp.ID},
-		})
+	thradReq := v2Request{
+		Version:       "2.0",
+		ID:            request.ID,
+		Context:       buildContext(params),
+		Opportunities: []v2Opportunity{buildOpportunity(imp, params)},
+		User:          buildUser(params),
+		Device:        device,
+		Surface:       buildSurface(request, device),
+		Privacy:       mergeUserMetaPrivacy(buildPrivacy(request), params.UserMeta),
 	}
 
-	return requests, errs
+	body, err := json.Marshal(thradReq)
+	if err != nil {
+		return nil, fmt.Errorf("thrad: failed to marshal request for imp %s: %w", imp.ID, err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+	headers.Set("Authorization", "Bearer "+a.selectKey(request, params.PublisherID))
+
+	return &adapters.RequestData{
+		Method:  http.MethodPost,
+		Uri:     endpointStr,
+		Body:    body,
+		Headers: headers,
+		ImpIDs:  []string{imp.ID},
+	}, nil
 }
 
 // ── Request builders ─────────────────────────────────────────────────────────
@@ -485,9 +364,22 @@ func buildOpportunity(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) v2Oppor
 	}
 
 	return v2Opportunity{
-		ID:      imp.ID,
+		ID:      opportunityID(imp, params),
 		Formats: []v2Format{{Type: "card", Assets: assets}},
 	}
+}
+
+// opportunityID is the stable id Thrad stores as the placement in its
+// reporting: the Stored Imp id (copied into placementId by tpc.paramfanout),
+// else the publisher, else the per-request imp id. Responses are matched to
+// imps by call (one imp per call), not by this id — see makeBidsV2.
+func opportunityID(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) string {
+	for _, id := range []string{params.PlacementID, params.PublisherID} {
+		if validID(id) {
+			return id
+		}
+	}
+	return imp.ID
 }
 
 var validAgeRanges = map[string]bool{
@@ -799,8 +691,8 @@ func mergeUserMetaPrivacy(p *v2Privacy, meta *openrtb_ext.ExtImpThradsUserMeta) 
 
 // ── Response handling ────────────────────────────────────────────────────────
 
-// MakeBids translates Thrad's v2 response into a native bid.
-func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.RequestData, response *adapters.ResponseData) (*adapters.BidderResponse, []error) {
+// makeBidsV2 translates a v2 response into a native bid.
+func (a *adapter) makeBidsV2(request *openrtb2.BidRequest, requestData *adapters.RequestData, response *adapters.ResponseData) (*adapters.BidderResponse, []error) {
 	if response.StatusCode == http.StatusNoContent {
 		return nil, nil
 	}
@@ -811,7 +703,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 	var resp v2Response
 	if err := json.Unmarshal(response.Body, &resp); err != nil {
 		return nil, []error{&errortypes.BadServerResponse{
-			Message: fmt.Sprintf("thradx: failed to parse response: %s", err),
+			Message: fmt.Sprintf("thrad: failed to parse response: %s", err),
 		}}
 	}
 
@@ -819,10 +711,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 	for _, imp := range request.Imp {
 		impIDs[imp.ID] = true
 	}
-	fallbackImpID := ""
-	if requestData != nil && len(requestData.ImpIDs) == 1 {
-		fallbackImpID = requestData.ImpIDs[0]
-	}
+	callImp := callImpID(request, requestData)
 
 	var errs []error
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(1)
@@ -835,19 +724,22 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 			// without adding a warning to every production auction.
 			if request.Test == 1 && opp.NoBidReason != "" {
 				errs = append(errs, &errortypes.Warning{
-					Message: fmt.Sprintf("thradx: no bid for opportunity %s: %s", opp.ID, opp.NoBidReason),
+					Message: fmt.Sprintf("thrad: no bid for opportunity %s: %s", opp.ID, opp.NoBidReason),
 				})
 			}
 			continue
 		}
 
-		impID := opp.ID
-		if !impIDs[impID] {
-			impID = fallbackImpID
+		// opportunities[].id is a stable placement id (see opportunityID),
+		// not an imp id, so the call's own imp is the answer; an id that
+		// does name an imp is honoured for safety.
+		impID := callImp
+		if impIDs[opp.ID] {
+			impID = opp.ID
 		}
 		if impID == "" {
 			errs = append(errs, &errortypes.BadServerResponse{
-				Message: fmt.Sprintf("thradx: response opportunity %q matches no imp", opp.ID),
+				Message: fmt.Sprintf("thrad: response opportunity %q matches no imp", opp.ID),
 			})
 			continue
 		}
@@ -856,7 +748,7 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 		bid := opp.Bids[0]
 		if bid.Format != "" && bid.Format != "card" {
 			errs = append(errs, &errortypes.BadServerResponse{
-				Message: fmt.Sprintf("thradx: unsupported bid format %q (only card is requested)", bid.Format),
+				Message: fmt.Sprintf("thrad: unsupported bid format %q (only card is requested)", bid.Format),
 			})
 			continue
 		}
@@ -878,7 +770,13 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.R
 			AdM:     adm,
 			ADomain: adomain,
 			CrID:    bid.ID,
-			BURL:    bid.WinURL, // inert in this fork — see v2Bid.WinURL
+			// Prebid core fires burl when the ad is rendered, which is when
+			// Thrad asks for win_url. Nothing fires lurl server-side: the
+			// client bundle fires the loss URL from the native adm's
+			// ext.thrad.lossUrl (see buildNativeAdm) when this bid loses the
+			// slot.
+			BURL: bid.WinURL,
+			LURL: bid.LossURL,
 		}
 		if bid.TTLMs > 0 {
 			ortbBid.Exp = bid.TTLMs / 1000
@@ -912,7 +810,7 @@ func statusError(response *adapters.ResponseData) error {
 			detail += " fields=" + fields.String()
 		}
 	}
-	msg := fmt.Sprintf("thradx: unexpected status code %d: %s", response.StatusCode, detail)
+	msg := fmt.Sprintf("thrad: unexpected status code %d: %s", response.StatusCode, detail)
 	if response.StatusCode == http.StatusBadRequest {
 		return &errortypes.BadInput{Message: msg}
 	}
@@ -965,16 +863,23 @@ func buildNativeAdm(bid v2Bid) (string, []error) {
 		Method int    `json:"method"`
 		URL    string `json:"url"`
 	}
+	type nativeExtThrad struct {
+		LossURL string `json:"lossUrl,omitempty"`
+	}
+	type nativeExt struct {
+		Thrad *nativeExtThrad `json:"thrad,omitempty"`
+	}
 	type nativeAdm struct {
 		Ver           string               `json:"ver"`
 		Link          nativeLink           `json:"link"`
 		Assets        []nativeAsset        `json:"assets"`
 		EventTrackers []nativeEventTracker `json:"eventtrackers,omitempty"`
+		Ext           *nativeExt           `json:"ext,omitempty"`
 	}
 
 	if bid.Assets.Title == "" || bid.Actions.ClickURL == "" {
 		return "", []error{&errortypes.BadServerResponse{
-			Message: fmt.Sprintf("thradx: bid %s is missing title or click_url", bid.ID),
+			Message: fmt.Sprintf("thrad: bid %s is missing title or click_url", bid.ID),
 		}}
 	}
 
@@ -1001,6 +906,11 @@ func buildNativeAdm(bid v2Bid) (string, []error) {
 		Link:   nativeLink{URL: bid.Actions.ClickURL},
 		Assets: assets,
 	}
+	// The browser decides which bid wins the slot, so it fires the loss
+	// notice; this is where the bundle finds it (bid.native.ortb.ext.thrad).
+	if bid.LossURL != "" {
+		adm.Ext = &nativeExt{Thrad: &nativeExtThrad{LossURL: bid.LossURL}}
+	}
 
 	var errs []error
 	for _, t := range bid.Trackers {
@@ -1009,7 +919,7 @@ func buildNativeAdm(bid v2Bid) (string, []error) {
 		}
 		if t.Method != "" && t.Method != "pixel" {
 			errs = append(errs, &errortypes.BadServerResponse{
-				Message: fmt.Sprintf("thradx: bid %s: unsupported tracker method %q for %s event, not fired", bid.ID, t.Method, t.Event),
+				Message: fmt.Sprintf("thrad: bid %s: unsupported tracker method %q for %s event, not fired", bid.ID, t.Method, t.Event),
 			})
 			continue
 		}
@@ -1022,7 +932,7 @@ func buildNativeAdm(bid v2Bid) (string, []error) {
 			adm.Link.ClickTrackers = append(adm.Link.ClickTrackers, t.URL)
 		default:
 			errs = append(errs, &errortypes.BadServerResponse{
-				Message: fmt.Sprintf("thradx: bid %s: unknown tracker event %q, not fired", bid.ID, t.Event),
+				Message: fmt.Sprintf("thrad: bid %s: unknown tracker event %q, not fired", bid.ID, t.Event),
 			})
 		}
 	}
@@ -1030,7 +940,7 @@ func buildNativeAdm(bid v2Bid) (string, []error) {
 	b, err := json.Marshal(adm)
 	if err != nil {
 		return "", append(errs, &errortypes.BadServerResponse{
-			Message: fmt.Sprintf("thradx: failed to build native adm: %s", err),
+			Message: fmt.Sprintf("thrad: failed to build native adm: %s", err),
 		})
 	}
 	return string(b), errs

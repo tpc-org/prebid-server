@@ -3,7 +3,9 @@
   "title": "Thrad Adapter Params",
   "description": "A schema which validates params accepted by the Thrad adapter",
   "type": "object",
-  "required": ["publisherId"],
+  "required": [
+    "publisherId"
+  ],
   "properties": {
     "publisherId": {
       "type": "string",
@@ -11,12 +13,17 @@
     },
     "requestType": {
       "type": "string",
-      "enum": ["contextual", "opener"],
+      "enum": [
+        "contextual",
+        "opener"
+      ],
       "description": "Bid request type: contextual (default) or opener"
     },
     "adFormats": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Accepted ad format types (e.g. sponsored_message)"
     },
     "userId": {
@@ -32,11 +39,20 @@
       "items": {
         "type": "object",
         "properties": {
-          "role":      { "type": "string" },
-          "content":   { "type": "string" },
-          "timestamp": { "type": "string" }
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
         },
-        "required": ["role", "content"]
+        "required": [
+          "role",
+          "content"
+        ]
       },
       "description": "Conversation history"
     },
@@ -55,6 +71,18 @@
     "userMetadata": {
       "type": "object",
       "description": "Optional user targeting and compliance metadata"
+    },
+    "protocol": {
+      "type": "integer",
+      "enum": [
+        1,
+        2
+      ],
+      "description": "Thrad bid request protocol for this placement: 2 = v2, 1/unset = v1 (default until the cutover; the thradx alias defaults to 2). Static, set in the Stored Imp. Removed once v1 is retired (2026-11-04)."
+    },
+    "placementId": {
+      "type": "string",
+      "description": "Stable placement id sent to Thrad v2 as opportunities[].id (Thrad's reporting placement). Filled automatically from the Stored Imp id by tpc.paramfanout; may be set explicitly."
     }
   }
 }
