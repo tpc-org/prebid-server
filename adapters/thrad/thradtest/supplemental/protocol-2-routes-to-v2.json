@@ -1,10 +1,6 @@
 {
   "mockBidRequest": {
     "id": "req-2",
-    "test": 1,
-    "site": {
-      "page": "https://chat.sayhola.ai/"
-    },
     "imp": [
       {
         "id": "imp-1",
@@ -15,12 +11,8 @@
         "ext": {
           "bidder": {
             "publisherId": "sayhola",
-            "requestType": "opener",
-            "adFormats": [
-              "sponsored_message"
-            ],
-            "userId": "user-123",
-            "chatId": "chat-456"
+            "protocol": 2,
+            "placementId": "sayhola-9243e9b6"
           }
         }
       }
@@ -33,12 +25,9 @@
         "body": {
           "version": "2.0",
           "id": "req-2",
-          "context": {
-            "id": "chat-456"
-          },
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola-9243e9b6",
               "formats": [
                 {
                   "type": "card",
@@ -54,21 +43,14 @@
                 }
               ]
             }
-          ],
-          "user": {
-            "id": "user-123"
-          },
-          "surface": {
-            "type": "web",
-            "domain": "chat.sayhola.ai"
-          }
+          ]
         },
         "impIDs": [
           "imp-1"
         ],
         "headers": {
           "Authorization": [
-            "Bearer pk_test_staging"
+            "Bearer pk_test_production"
           ],
           "Content-Type": [
             "application/json"
@@ -88,18 +70,12 @@
             {
               "id": "imp-1",
               "bids": [],
-              "no_bid_reason": "no_fill"
+              "no_bid_reason": "frequency_capped"
             }
           ]
         }
       }
     }
   ],
-  "expectedBidResponses": [],
-  "expectedMakeBidsErrors": [
-    {
-      "value": "thrad: no bid for opportunity imp-1: no_fill",
-      "comparison": "literal"
-    }
-  ]
+  "expectedBidResponses": []
 }

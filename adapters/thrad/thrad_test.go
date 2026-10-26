@@ -23,6 +23,44 @@ func TestJsonSamples(t *testing.T) {
 	adapterstest.RunJSONBidderTest(t, "thradtest", bidder)
 }
 
+// TestJsonSamplesV2 runs the v2 fixtures through the "thradx" alias, whose
+// default protocol is v2. (thradtest/supplemental/protocol-2-routes-to-v2.json
+// covers "thrad" with an explicit "protocol": 2.)
+func TestJsonSamplesV2(t *testing.T) {
+	bidder, buildErr := Builder(openrtb_ext.BidderName("thradx"), config.Adapter{
+		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request",
+		ExtraAdapterInfo: `{"productionKey":"pk_test_production","stagingKey":"pk_test_staging",
+			"publishers":{"drawify":{"productionKey":"pk_drawify_prod","stagingKey":"pk_drawify_staging"}}}`,
+	}, config.Server{})
+	if buildErr != nil {
+		t.Fatalf("Builder returned unexpected error %v", buildErr)
+	}
+	adapterstest.RunJSONBidderTest(t, "thradtestv2", bidder)
+}
+
+func TestProtocolSelection(t *testing.T) {
+	extra := `{"productionKey":"pk"}`
+	thrad, _ := Builder(openrtb_ext.BidderThrad, config.Adapter{Endpoint: "https://ssp.thrad.ai/api/v2/bid-request", ExtraAdapterInfo: extra}, config.Server{})
+	thradx, _ := Builder(openrtb_ext.BidderName("thradx"), config.Adapter{Endpoint: "https://ssp.thrad.ai/api/v2/bid-request", ExtraAdapterInfo: extra}, config.Server{})
+	for _, tc := range []struct {
+		name     string
+		a        *adapter
+		protocol int
+		want     int
+	}{
+		{"thrad default is v1", thrad.(*adapter), 0, 1},
+		{"thrad opts in to v2", thrad.(*adapter), 2, 2},
+		{"thradx default is v2", thradx.(*adapter), 0, 2},
+		{"thradx can be pinned to v1", thradx.(*adapter), 1, 1},
+		{"unknown value falls back to default", thrad.(*adapter), 7, 1},
+	} {
+		got := tc.a.protocolFor(openrtb_ext.ExtImpThrads{Protocol: tc.protocol})
+		if got != tc.want {
+			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestBuilderRequiresKeys(t *testing.T) {
 	_, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
 		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request",

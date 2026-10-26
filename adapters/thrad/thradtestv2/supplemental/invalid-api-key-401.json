@@ -1,6 +1,6 @@
 {
   "mockBidRequest": {
-    "id": "req-2",
+    "id": "req-4",
     "imp": [
       {
         "id": "imp-1",
@@ -22,10 +22,10 @@
         "uri": "https://ssp.thrad.ai/api/v2/bid-request",
         "body": {
           "version": "2.0",
-          "id": "req-2",
+          "id": "req-4",
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola",
               "formats": [
                 {
                   "type": "card",
@@ -48,21 +48,21 @@
         ]
       },
       "mockResponse": {
-        "status": 200,
+        "status": 401,
         "body": {
-          "version": "2.0",
-          "id": "req-2",
-          "currency": "USD",
-          "opportunities": [
-            {
-              "id": "imp-1",
-              "bids": [],
-              "no_bid_reason": "frequency_capped"
-            }
-          ]
+          "error": {
+            "code": "invalid_api_key",
+            "message": "bad key"
+          }
         }
       }
     }
   ],
-  "expectedBidResponses": []
+  "expectedBidResponses": [],
+  "expectedMakeBidsErrors": [
+    {
+      "value": "thrad: unexpected status code 401: invalid_api_key: bad key",
+      "comparison": "literal"
+    }
+  ]
 }

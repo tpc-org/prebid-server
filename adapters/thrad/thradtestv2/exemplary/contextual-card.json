@@ -95,7 +95,7 @@
           },
           "opportunities": [
             {
-              "id": "imp-1",
+              "id": "sayhola",
               "formats": [
                 {
                   "type": "card",
@@ -209,13 +209,14 @@
             "id": "bid-abc",
             "impid": "imp-1",
             "price": 4.74,
-            "adm": "{\"ver\":\"1.2\",\"link\":{\"url\":\"https://dsp.thrad.ai/api/v1/tracking/redirect?token=x\",\"clicktrackers\":[\"https://dsp.example/click?id=c\"]},\"assets\":[{\"id\":0,\"title\":{\"text\":\"Trail-tested shoes for long runs\"}},{\"id\":1,\"img\":{\"url\":\"https://media.thrads.ai/shoe.png\",\"type\":3}},{\"id\":2,\"data\":{\"value\":\"Lightweight and weatherproof.\"}},{\"id\":3,\"data\":{\"value\":\"Trailhead Outfitters\"}},{\"id\":4,\"data\":{\"value\":\"Shop Now\"}}],\"eventtrackers\":[{\"event\":2,\"method\":1,\"url\":\"https://ssp.thrads.ai/api/v1/tracking/ssp-view?token=v\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/imp?id=r\"}]}",
+            "adm": "{\"ver\":\"1.2\",\"link\":{\"url\":\"https://dsp.thrad.ai/api/v1/tracking/redirect?token=x\",\"clicktrackers\":[\"https://dsp.example/click?id=c\"]},\"assets\":[{\"id\":0,\"title\":{\"text\":\"Trail-tested shoes for long runs\"}},{\"id\":1,\"img\":{\"url\":\"https://media.thrads.ai/shoe.png\",\"type\":3}},{\"id\":2,\"data\":{\"value\":\"Lightweight and weatherproof.\"}},{\"id\":3,\"data\":{\"value\":\"Trailhead Outfitters\"}},{\"id\":4,\"data\":{\"value\":\"Shop Now\"}}],\"eventtrackers\":[{\"event\":2,\"method\":1,\"url\":\"https://ssp.thrads.ai/api/v1/tracking/ssp-view?token=v\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/imp?id=r\"}],\"ext\":{\"thrad\":{\"lossUrl\":\"https://ssp.thrads.ai/api/v2/auction/loss?token=l\\u0026reason=${AUCTION_LOSS}\"}}}",
             "burl": "https://ssp.thrads.ai/api/v2/auction/win?token=w",
             "adomain": [
               "trailhead.example"
             ],
             "crid": "bid-abc",
-            "exp": 3660
+            "exp": 3660,
+            "lurl": "https://ssp.thrads.ai/api/v2/auction/loss?token=l&reason=${AUCTION_LOSS}"
           },
           "type": "native"
         }

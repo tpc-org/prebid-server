@@ -1,8 +1,9 @@
-# Thrad bid request protocol v2 (docs.thrad.ai/api/api-reference/bid-request-v2).
-# Cut over from v1 (ssp.thrads.ai/api/v1/ssp/bid-request) by moving the
-# side-by-side "thradx" test adapter's code here — see adapters/thrad/thrad.go.
-# Per-publisher keys still come from pbs.yaml adapters.thrad.extra_info
-# (same layout, same keys: Thrad's v2 uses the v1 API keys).
+# Thrad. The adapter speaks bid request protocol v1 and v2, chosen per
+# placement (Stored Imp "protocol": 2 → v2; unset → v1 for now) — see
+# adapters/thrad/thrad.go. This endpoint is v2's
+# (docs.thrad.ai/api/api-reference/bid-request-v2); v1's endpoint is fixed in
+# code until Thrad retires it on 2026-11-04. Per-publisher keys come from
+# pbs.yaml adapters.thrad.extra_info (same keys for both protocols).
 endpoint: "https://ssp.thrad.ai/api/v2/bid-request"
 maintainer:
   email: "prebid@tpcsrv.com"
