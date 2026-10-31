@@ -38,6 +38,12 @@ type ExtImpThrads struct {
 	Summary    string            `json:"summary,omitempty"`
 	TurnNumber *int              `json:"turnNumber,omitempty"`
 
+	// HashedEmail is a logged-in user's SHA-256(trim(lowercase(email))) hex,
+	// hashed publisher-side (window.tpc.data.hashedEmail). Sent to v2 only,
+	// as user.extended_ids.emails_sha256; v1 has no field for it. Never
+	// required — anonymous users have none.
+	HashedEmail string `json:"hashedEmail,omitempty"`
+
 	// Optional publisher-side config and user metadata.
 	Config   *ExtImpThradsConfig   `json:"config,omitempty"`
 	UserMeta *ExtImpThradsUserMeta `json:"userMetadata,omitempty"`

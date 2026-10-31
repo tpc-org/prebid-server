@@ -25,7 +25,7 @@
           "id": "req-9",
           "opportunities": [
             {
-              "id": "sayhola",
+              "id": "sayhola.opener",
               "formats": [
                 {
                   "type": "card",

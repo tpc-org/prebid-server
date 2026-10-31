@@ -1,6 +1,7 @@
 package thrad
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
@@ -142,6 +143,68 @@ func TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction(t *testing.T)
 	}
 	if got := a.selectKey(&openrtb2.BidRequest{Test: 1}, "learnrithm"); got != "pk_learnrithm_staging" {
 		t.Errorf("test=1 for staging-only publisher = %q, want %q (that publisher's own staging key, for debugging)", got, "pk_learnrithm_staging")
+	}
+}
+
+// TestBuildUserHashedEmail: Thrad v2 refuses anything but a lowercase
+// 64-char hex hash, and a refused field 400s the whole request, so only a
+// valid hash is ever sent.
+func TestBuildUserHashedEmail(t *testing.T) {
+	hash := "6db61e6dcbcf2390e4a46af426f26a133a3bee45021422fc7ae86e9136f14110"
+	tests := []struct {
+		name   string
+		params openrtb_ext.ExtImpThrads
+		want   []string
+	}{
+		{"valid hash", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: hash}, []string{hash}},
+		{"uppercase hex is lowered", openrtb_ext.ExtImpThrads{HashedEmail: strings.ToUpper(hash)}, []string{hash}},
+		{"plain email dropped", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: "someone@example.com"}, nil},
+		{"wrong length dropped", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: hash[:40]}, nil},
+		{"absent", openrtb_ext.ExtImpThrads{UserID: "u1"}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			user := buildUser(tc.params)
+			if user == nil {
+				t.Fatal("buildUser returned nil; every case has a user id or a hash")
+			}
+			var got []string
+			if user.ExtendedIDs != nil {
+				got = user.ExtendedIDs.EmailsSHA256
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("emails_sha256 = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if buildUser(openrtb_ext.ExtImpThrads{HashedEmail: "not-a-hash"}) != nil {
+		t.Error("a user block with nothing valid in it must be omitted")
+	}
+}
+
+// TestOpportunityIDKind locks in the placement split Thrad asked for
+// (2026-10-31): the stable placement id carries ".opener" before the
+// conversation and ".contextual" once a chat context is sent.
+func TestOpportunityIDKind(t *testing.T) {
+	long := strings.Repeat("x", maxIDLen-len(".opener")+1)
+	tests := []struct {
+		name       string
+		params     openrtb_ext.ExtImpThrads
+		contextual bool
+		want       string
+	}{
+		{"stored imp opener", openrtb_ext.ExtImpThrads{PlacementID: "sayhola-9243e9b6", PublisherID: "sayhola"}, false, "sayhola-9243e9b6.opener"},
+		{"stored imp contextual", openrtb_ext.ExtImpThrads{PlacementID: "sayhola-9243e9b6", PublisherID: "sayhola"}, true, "sayhola-9243e9b6.contextual"},
+		{"publisher fallback", openrtb_ext.ExtImpThrads{PublisherID: "magneta"}, true, "magneta.contextual"},
+		{"imp id fallback", openrtb_ext.ExtImpThrads{}, false, "imp-1.opener"},
+		{"suffix dropped past the length limit", openrtb_ext.ExtImpThrads{PlacementID: long}, false, long},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := opportunityID(openrtb2.Imp{ID: "imp-1"}, tc.params, tc.contextual); got != tc.want {
+				t.Errorf("opportunityID = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

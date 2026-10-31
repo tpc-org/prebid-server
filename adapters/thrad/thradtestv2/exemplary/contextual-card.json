@@ -95,7 +95,7 @@
           },
           "opportunities": [
             {
-              "id": "sayhola",
+              "id": "sayhola.contextual",
               "formats": [
                 {
                   "type": "card",

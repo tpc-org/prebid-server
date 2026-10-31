@@ -263,12 +263,13 @@ func fanOutMutation(
 	return p, nil
 }
 
-// fanOutThrad fills in Thrad's dynamic UserID from the generic block,
-// leaving every other field (including static PublisherID/RequestType/
-// AdFormats already merged in from the Stored Imp) untouched. Only UserID
-// is wired today — matching the mapping already verified live for the web
-// bundle (see docs/integration/server-side-integration.md's Contextual
-// section); Thrad's other dynamic fields (ChatID, Messages, Summary,
+// fanOutThrad fills in Thrad's dynamic UserID and HashedEmail from the
+// generic block, leaving every other field (including static PublisherID/
+// RequestType/AdFormats already merged in from the Stored Imp) untouched.
+// UserID matches the mapping already verified live for the web bundle (see
+// docs/integration/server-side-integration.md's Contextual section);
+// HashedEmail (2026-10-31) feeds v2's user.extended_ids, which the adapter
+// validates. Thrad's other dynamic fields (ChatID, Messages, Summary,
 // TurnNumber) are defined on ExtImpThrads but not part of that verified
 // mapping, so this deliberately does not touch them.
 func fanOutThrad(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage, bool) {
@@ -276,10 +277,18 @@ func fanOutThrad(raw json.RawMessage, generic tpcGenericParams) (json.RawMessage
 	if err := json.Unmarshal(raw, &thrad); err != nil {
 		return raw, false
 	}
-	if thrad.UserID != "" || generic.UserID == "" {
+	changed := false
+	if thrad.UserID == "" && generic.UserID != "" {
+		thrad.UserID = generic.UserID
+		changed = true
+	}
+	if thrad.HashedEmail == "" && generic.HashedEmail != "" {
+		thrad.HashedEmail = generic.HashedEmail
+		changed = true
+	}
+	if !changed {
 		return raw, false // already set, or nothing to fill in — don't touch
 	}
-	thrad.UserID = generic.UserID
 	merged, err := json.Marshal(thrad)
 	if err != nil {
 		return raw, false
@@ -318,6 +327,9 @@ func fanOutThradx(raw, tpcRaw json.RawMessage, generic tpcGenericParams) (json.R
 	if src.UserID == "" {
 		src.UserID = generic.UserID
 	}
+	if src.HashedEmail == "" {
+		src.HashedEmail = generic.HashedEmail
+	}
 	if src.ChatID == "" {
 		src.ChatID = generic.ChatID
 		if src.ChatID == "" {
@@ -333,6 +345,10 @@ func fanOutThradx(raw, tpcRaw json.RawMessage, generic tpcGenericParams) (json.R
 	changed := false
 	if thradx.UserID == "" && src.UserID != "" {
 		thradx.UserID = src.UserID
+		changed = true
+	}
+	if thradx.HashedEmail == "" && src.HashedEmail != "" {
+		thradx.HashedEmail = src.HashedEmail
 		changed = true
 	}
 	if thradx.ChatID == "" && src.ChatID != "" {
