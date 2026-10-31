@@ -37,7 +37,7 @@
           "id": "req-6",
           "opportunities": [
             {
-              "id": "sayhola",
+              "id": "sayhola.opener",
               "formats": [
                 {
                   "type": "card",

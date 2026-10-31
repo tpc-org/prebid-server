@@ -25,7 +25,7 @@
           "id": "req-3",
           "opportunities": [
             {
-              "id": "drawify",
+              "id": "drawify.opener",
               "formats": [
                 {
                   "type": "card",

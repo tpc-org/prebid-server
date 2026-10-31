@@ -228,11 +228,12 @@ func (a *adapter) makeRequestV2(request *openrtb2.BidRequest, imp openrtb2.Imp, 
 	}
 
 	device := buildDevice(request.Device)
+	context := buildContext(params)
 	thradReq := v2Request{
 		Version:       "2.0",
 		ID:            request.ID,
-		Context:       buildContext(params),
-		Opportunities: []v2Opportunity{buildOpportunity(imp, params)},
+		Context:       context,
+		Opportunities: []v2Opportunity{buildOpportunity(imp, params, context != nil && context.Chat != nil)},
 		User:          buildUser(params),
 		Device:        device,
 		Surface:       buildSurface(request, device),
@@ -332,7 +333,7 @@ type nativeRequest struct {
 // buildOpportunity requests a single "card" (v1's sponsored_message). Title
 // and description length limits come from the Stored Imp's own native
 // request, so Thrad's creative fits the slot it'll render into.
-func buildOpportunity(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) v2Opportunity {
+func buildOpportunity(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads, contextual bool) v2Opportunity {
 	assets := v2FormatAssets{
 		Title:       &v2AssetSpec{},
 		Description: &v2AssetSpec{},
@@ -364,22 +365,35 @@ func buildOpportunity(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) v2Oppor
 	}
 
 	return v2Opportunity{
-		ID:      opportunityID(imp, params),
+		ID:      opportunityID(imp, params, contextual),
 		Formats: []v2Format{{Type: "card", Assets: assets}},
 	}
 }
 
 // opportunityID is the stable id Thrad stores as the placement in its
 // reporting: the Stored Imp id (copied into placementId by tpc.paramfanout),
-// else the publisher, else the per-request imp id. Responses are matched to
-// imps by call (one imp per call), not by this id — see makeBidsV2.
-func opportunityID(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads) string {
-	for _, id := range []string{params.PlacementID, params.PublisherID} {
-		if validID(id) {
-			return id
+// else the publisher, else the per-request imp id, suffixed with the kind of
+// placement — ".opener" before the conversation, ".contextual" once a chat
+// context is sent — so Thrad reports the two separately. The suffix is
+// dropped rather than truncating an id past Thrad's length limit. Responses
+// are matched to imps by call (one imp per call), not by this id — see
+// makeBidsV2.
+func opportunityID(imp openrtb2.Imp, params openrtb_ext.ExtImpThrads, contextual bool) string {
+	id := imp.ID
+	for _, candidate := range []string{params.PlacementID, params.PublisherID} {
+		if validID(candidate) {
+			id = candidate
+			break
 		}
 	}
-	return imp.ID
+	kind := ".opener"
+	if contextual {
+		kind = ".contextual"
+	}
+	if validID(id + kind) {
+		return id + kind
+	}
+	return id
 }
 
 var validAgeRanges = map[string]bool{
