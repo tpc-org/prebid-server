@@ -30,6 +30,10 @@
       "type": "string",
       "description": "Anonymous user identifier, injected per-auction from window.tpc.data"
     },
+    "hashedEmail": {
+      "type": "string",
+      "description": "Logged-in user's SHA-256(trim(lowercase(email))) hex, hashed publisher-side; protocol 2 only (user.extended_ids.emails_sha256). Optional."
+    },
     "chatId": {
       "type": "string",
       "description": "Conversation session identifier"

@@ -31,6 +31,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -99,8 +100,13 @@ type v2AssetSpec struct {
 }
 
 type v2User struct {
-	ID       string `json:"id,omitempty"`
-	AgeRange string `json:"age_range,omitempty"`
+	ID          string         `json:"id,omitempty"`
+	AgeRange    string         `json:"age_range,omitempty"`
+	ExtendedIDs *v2ExtendedIDs `json:"extended_ids,omitempty"`
+}
+
+type v2ExtendedIDs struct {
+	EmailsSHA256 []string `json:"emails_sha256,omitempty"`
 }
 
 type v2Device struct {
@@ -409,11 +415,19 @@ func buildUser(params openrtb_ext.ExtImpThrads) *v2User {
 	if params.UserMeta != nil && validAgeRanges[params.UserMeta.AgeRange] {
 		user.AgeRange = params.UserMeta.AgeRange
 	}
-	if user.ID == "" && user.AgeRange == "" {
+	// Thrad refuses anything but a lowercase 64-char hex hash, and a refused
+	// field 400s the whole request, so a malformed value is dropped. Hex case
+	// doesn't change the hash, so uppercase input is lowered rather than lost.
+	if h := strings.ToLower(strings.TrimSpace(params.HashedEmail)); sha256Hex.MatchString(h) {
+		user.ExtendedIDs = &v2ExtendedIDs{EmailsSHA256: []string{h}}
+	}
+	if user.ID == "" && user.AgeRange == "" && user.ExtendedIDs == nil {
 		return nil
 	}
 	return user
 }
+
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func buildDevice(d *openrtb2.Device) *v2Device {
 	if d == nil {

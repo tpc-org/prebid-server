@@ -94,6 +94,27 @@ func TestFanOutThradAndImprezia(t *testing.T) {
 	assert.Nil(t, imprezia["deviceContext"], "never fabricated — generic block supplied none")
 }
 
+// TestFanOutThradHashedEmailWithUserAlreadySet confirms hashedEmail is
+// filled even when the Stored Imp or request already carries a userId —
+// the two are filled independently, never one gating the other.
+func TestFanOutThradHashedEmailWithUserAlreadySet(t *testing.T) {
+	hash := "6db61e6dcbcf2390e4a46af426f26a133a3bee45021422fc7ae86e9136f14110"
+	rw := buildRequest(t, map[string]json.RawMessage{
+		"tpc": mustJSON(t, map[string]interface{}{"userId": "generic-user", "hashedEmail": hash}),
+		"thrad": mustJSON(t, map[string]interface{}{
+			"publisherId": "sayhola",
+			"userId":      "request-user",
+		}),
+	})
+
+	result := run(t, Module{enabled: true}, rw)
+	assert.NotEmpty(t, result.ChangeSet.Mutations())
+
+	thrad := bidderExt(t, rw, "thrad")
+	assert.Equal(t, hash, thrad["hashedEmail"])
+	assert.Equal(t, "request-user", thrad["userId"], "an already-set field is never overwritten")
+}
+
 // TestFanOutImpreziaPassesThroughDeviceContext confirms DeviceContext is
 // only ever passed through verbatim from the generic block, never guessed
 // — no server-side source of truth for it exists (see fanOutImprezia's doc).

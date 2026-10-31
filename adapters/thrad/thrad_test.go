@@ -146,6 +146,42 @@ func TestSelectKeyStagingOnlyPublisherFallsBackToDefaultProduction(t *testing.T)
 	}
 }
 
+// TestBuildUserHashedEmail: Thrad v2 refuses anything but a lowercase
+// 64-char hex hash, and a refused field 400s the whole request, so only a
+// valid hash is ever sent.
+func TestBuildUserHashedEmail(t *testing.T) {
+	hash := "6db61e6dcbcf2390e4a46af426f26a133a3bee45021422fc7ae86e9136f14110"
+	tests := []struct {
+		name   string
+		params openrtb_ext.ExtImpThrads
+		want   []string
+	}{
+		{"valid hash", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: hash}, []string{hash}},
+		{"uppercase hex is lowered", openrtb_ext.ExtImpThrads{HashedEmail: strings.ToUpper(hash)}, []string{hash}},
+		{"plain email dropped", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: "someone@example.com"}, nil},
+		{"wrong length dropped", openrtb_ext.ExtImpThrads{UserID: "u1", HashedEmail: hash[:40]}, nil},
+		{"absent", openrtb_ext.ExtImpThrads{UserID: "u1"}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			user := buildUser(tc.params)
+			if user == nil {
+				t.Fatal("buildUser returned nil; every case has a user id or a hash")
+			}
+			var got []string
+			if user.ExtendedIDs != nil {
+				got = user.ExtendedIDs.EmailsSHA256
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("emails_sha256 = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if buildUser(openrtb_ext.ExtImpThrads{HashedEmail: "not-a-hash"}) != nil {
+		t.Error("a user block with nothing valid in it must be omitted")
+	}
+}
+
 // TestOpportunityIDKind locks in the placement split Thrad asked for
 // (2026-10-31): the stable placement id carries ".opener" before the
 // conversation and ".contextual" once a chat context is sent.
