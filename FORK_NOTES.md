@@ -50,6 +50,17 @@ upstream file — `scripts/check-upstream-pr-scope.sh` flags the whole
 `builder.go` itself, so double-check that file's diff by eye before
 including it in any upstream branch.
 
+## Upstream files with fork edits
+
+- `config/structlog.go` (2026-10-31) — the startup config dump redacted only
+  names containing `password`, so `adapters[*].extra_info` (which carries
+  Thrad/thradx/Gravity/Imprezia API keys in this fork) and any `*_secret`,
+  `*_token`, `*_key` field were printed in plain text. The blocklist now
+  redacts those too; `TestCredentialsRedacted` locks it in. This is a genuine
+  upstream issue (`app_secret`, `recaptcha_secret`, `override_token`,
+  `client_key`), so it could go upstream — but not with the fork-specific
+  comment as-is.
+
 ## Upstream PR workflow
 
 When contributing a fix or improvement to prebid/prebid-server upstream:

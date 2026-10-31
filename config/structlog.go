@@ -14,6 +14,12 @@ type logMsg func(string, ...interface{})
 var mapregex = regexp.MustCompile(`mapstructure:"([^"]+)"`)
 var blocklistregexp = []*regexp.Regexp{
 	regexp.MustCompile("password"),
+	// TPC fork: never log credentials. extra_info is an opaque per-adapter
+	// string that in this fork carries partner API keys (thrad, thradx,
+	// gravity, imprezia), so it is redacted whole.
+	regexp.MustCompile("extra_info"),
+	regexp.MustCompile("(secret|token)$"),
+	regexp.MustCompile("_key$"),
 }
 
 // LogGeneral will log nearly any sort of value, but requires the name of the root object to be in the
