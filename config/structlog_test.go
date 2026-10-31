@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -63,5 +64,43 @@ func TestBasic(t *testing.T) {
 
 	if expected != result {
 		t.Errorf("Did not log properly.\ndesired:%s\nfound:%s\nsource: %v", expected, result, testCfg)
+	}
+}
+
+// TestCredentialsRedacted (TPC fork): the startup config dump must never print
+// partner credentials — adapters' extra_info carries API keys in this fork.
+func TestCredentialsRedacted(t *testing.T) {
+	var buf bytes.Buffer
+	mylogger := func(msg string, args ...interface{}) {
+		buf.WriteString(fmt.Sprintf(fmt.Sprintln(msg), args...))
+	}
+
+	bidders := BidderInfos{"thrad": BidderInfo{
+		Endpoint:         "https://ssp.thrad.ai/api/v2/bid-request",
+		ExtraAdapterInfo: `{"productionKey":"sk_live_do_not_log"}`,
+		AppSecret:        "app-secret-do-not-log",
+	}}
+	logMapWithLogger(reflect.ValueOf(bidders), "adapters", mylogger)
+	logStructWithLogger(reflect.ValueOf(struct {
+		ClientKey     string `mapstructure:"client_key"`
+		OverrideToken string `mapstructure:"override_token"`
+		Keyword       string `mapstructure:"keyword"`
+	}{"client-key-do-not-log", "token-do-not-log", "visible"}), "", mylogger)
+
+	out := buf.String()
+	if strings.Contains(out, "do-not-log") || strings.Contains(out, "do_not_log") {
+		t.Fatalf("credential logged:\n%s", out)
+	}
+	for _, want := range []string{
+		"adapters[thrad].extra_info: <REDACTED>",
+		"adapters[thrad].app_secret: <REDACTED>",
+		"client_key: <REDACTED>",
+		"override_token: <REDACTED>",
+		"adapters[thrad].endpoint: https://ssp.thrad.ai/api/v2/bid-request",
+		"keyword: visible",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
 	}
 }
