@@ -616,6 +616,9 @@ func storeMatchesOS(store, os string) bool {
 	return false
 }
 
+// Thrad rejects the entire bid request if a web domain fails this pattern.
+var v2WebDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+
 // buildSurface describes where the ad renders. Thrad 400s a surface that's
 // missing its type's required fields, so a partial app surface is omitted
 // entirely rather than sent incomplete.
@@ -632,16 +635,16 @@ func buildSurface(request *openrtb2.BidRequest, device *v2Device) *v2Surface {
 		return &v2Surface{Type: "app", Store: store, Bundle: app.Bundle, StoreURL: app.StoreURL}
 	}
 	if site := request.Site; site != nil {
-		domain := site.Domain
+		domain := strings.ToLower(site.Domain)
 		if domain == "" {
-			if u, err := url.Parse(site.Page); err == nil {
-				domain = u.Hostname()
+			if u, err := url.Parse(site.Page); err == nil && (u.Scheme == "https" || u.Scheme == "http") {
+				domain = strings.ToLower(u.Hostname())
 			}
 		}
-		if domain == "" {
+		if !v2WebDomain.MatchString(domain) {
 			return nil
 		}
-		return &v2Surface{Type: "web", Domain: strings.ToLower(domain)}
+		return &v2Surface{Type: "web", Domain: domain}
 	}
 	return nil
 }
