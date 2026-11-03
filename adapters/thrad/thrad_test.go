@@ -1,6 +1,7 @@
 package thrad
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,6 +10,61 @@ import (
 	"github.com/prebid/prebid-server/v4/config"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 )
+
+func TestV2WebSurfaceValidation(t *testing.T) {
+	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{
+		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request", ExtraAdapterInfo: `{"productionKey":"pk_test"}`,
+	}, config.Server{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, domain, page, want string
+	}{
+		{"Creative Fabrica desktop", "studio", "app://studio/free-image-generator", ""},
+		{"desktop page fallback", "", "app://studio/free-image-generator", ""},
+		{"custom scheme with dotted host", "", "app://studio.example.com/generator", ""},
+		{"local file", "", "file:///studio/index.html", ""},
+		{"localhost", "localhost", "", ""},
+		{"URL instead of domain", "https://example.com", "", ""},
+		{"port in domain", "example.com:443", "", ""},
+		{"empty label", "example..com", "", ""},
+		{"leading hyphen", "-example.com", "", ""},
+		{"trailing hyphen", "example-.com", "", ""},
+		{"underscore", "ad_server.example.com", "", ""},
+		{"public domain", "creativefabrica.com", "", "creativefabrica.com"},
+		{"uppercase normalized", "WWW.Example.COM", "", "www.example.com"},
+		{"hyphenated domain", "my-site.example.com", "", "my-site.example.com"},
+		{"HTTPS fallback", "", "https://www.example.com:8443/path", "www.example.com"},
+		{"HTTP fallback", "", "http://example.com/path", "example.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &openrtb2.BidRequest{
+				ID: "cf-surface-regression", Site: &openrtb2.Site{Domain: tc.domain, Page: tc.page},
+				Imp: []openrtb2.Imp{{ID: "imp-1", Native: &openrtb2.Native{Request: `{"assets":[{"title":{"len":80}}]}`},
+					Ext: json.RawMessage(`{"bidder":{"protocol":2,"publisherId":"creative-fabrica","userId":"anon-test","chatId":"gen-test","messages":[{"role":"user","content":"car"}]}}`)}},
+			}
+			calls, errs := bidder.MakeRequests(request, nil)
+			if len(errs) != 0 || len(calls) != 1 {
+				t.Fatalf("expected one valid upstream request: calls=%d errors=%v", len(calls), errs)
+			}
+			var body v2Request
+			if err := json.Unmarshal(calls[0].Body, &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Version != "2.0" || body.Context.Chat.Messages[0].Content != "car" {
+				t.Fatal("V2 context was lost")
+			}
+			if tc.want == "" {
+				if body.Surface != nil {
+					t.Errorf("invalid web surface must be omitted, got %+v", body.Surface)
+				}
+			} else if body.Surface == nil || body.Surface.Type != "web" || body.Surface.Domain != tc.want {
+				t.Errorf("want web domain %q, got %+v", tc.want, body.Surface)
+			}
+		})
+	}
+}
 
 func TestJsonSamples(t *testing.T) {
 	bidder, buildErr := Builder(openrtb_ext.BidderThrad, config.Adapter{
