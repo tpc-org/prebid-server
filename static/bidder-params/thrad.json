@@ -82,7 +82,7 @@
         1,
         2
       ],
-      "description": "Thrad bid request protocol for this placement: 2 = v2, 1/unset = v1 (default until the cutover; the thradx alias defaults to 2). Static, set in the Stored Imp. Removed once v1 is retired (2026-11-04)."
+      "description": "Ignored: the adapter speaks v2 only since v1's removal (2026-11). Still accepted because Stored Imps carry it from the per-placement migration; remove once they drop it."
     },
     "placementId": {
       "type": "string",
