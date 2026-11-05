@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
+	"github.com/prebid/prebid-server/v4/adapters"
 	"github.com/prebid/prebid-server/v4/adapters/adapterstest"
 	"github.com/prebid/prebid-server/v4/config"
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
@@ -77,12 +78,11 @@ func TestJsonSamples(t *testing.T) {
 		t.Fatalf("Builder returned unexpected error %v", buildErr)
 	}
 
-	adapterstest.RunJSONBidderTest(t, "thradtest", bidder)
+	adapterstest.RunJSONBidderTest(t, "thradtestv2", bidder)
 }
 
-// TestJsonSamplesV2 runs the v2 fixtures through the "thradx" alias, whose
-// default protocol is v2. (thradtest/supplemental/protocol-2-routes-to-v2.json
-// covers "thrad" with an explicit "protocol": 2.)
+// TestJsonSamplesV2 runs the same fixtures through the "thradx" alias, which
+// must behave identically to "thrad" until it is removed.
 func TestJsonSamplesV2(t *testing.T) {
 	bidder, buildErr := Builder(openrtb_ext.BidderName("thradx"), config.Adapter{
 		Endpoint: "https://ssp.thrad.ai/api/v2/bid-request",
@@ -95,27 +95,33 @@ func TestJsonSamplesV2(t *testing.T) {
 	adapterstest.RunJSONBidderTest(t, "thradtestv2", bidder)
 }
 
-func TestProtocolSelection(t *testing.T) {
-	extra := `{"productionKey":"pk"}`
-	thrad, _ := Builder(openrtb_ext.BidderThrad, config.Adapter{Endpoint: "https://ssp.thrad.ai/api/v2/bid-request", ExtraAdapterInfo: extra}, config.Server{})
-	thradx, _ := Builder(openrtb_ext.BidderName("thradx"), config.Adapter{Endpoint: "https://ssp.thrad.ai/api/v2/bid-request", ExtraAdapterInfo: extra}, config.Server{})
-	for _, tc := range []struct {
-		name     string
-		a        *adapter
-		protocol int
-		want     int
-	}{
-		{"thrad default is v1", thrad.(*adapter), 0, 1},
-		{"thrad opts in to v2", thrad.(*adapter), 2, 2},
-		{"thradx default is v2", thradx.(*adapter), 0, 2},
-		{"thradx can be pinned to v1", thradx.(*adapter), 1, 1},
-		{"unknown value falls back to default", thrad.(*adapter), 7, 1},
-	} {
-		got := tc.a.protocolFor(openrtb_ext.ExtImpThrads{Protocol: tc.protocol})
-		if got != tc.want {
-			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
+// TestProtocolParamIgnored: v1 is gone, so whatever "protocol" a Stored Imp
+// still carries (2 today, a stray 1, or none), every imp goes to v2.
+func TestProtocolParamIgnored(t *testing.T) {
+	const v2 = "https://ssp.thrad.ai/api/v2/bid-request"
+	bidder, err := Builder(openrtb_ext.BidderThrad, config.Adapter{Endpoint: v2, ExtraAdapterInfo: `{"productionKey":"pk"}`}, config.Server{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, protocol := range []string{``, `,"protocol":1`, `,"protocol":2`} {
+		req := &openrtb2.BidRequest{ID: "r", Imp: []openrtb2.Imp{{
+			ID:     "imp-1",
+			Native: &openrtb2.Native{Request: `{"assets":[]}`},
+			Ext:    json.RawMessage(`{"bidder":{"publisherId":"sayhola","userId":"u1"` + protocol + `}}`),
+		}}}
+		reqs, errs := bidder.MakeRequests(req, nil)
+		if len(errs) != 0 || len(reqs) != 1 || reqs[0].Uri != v2 {
+			t.Errorf("protocol param %q: want one v2 call, got %d calls (uri %v) errs %v", protocol, len(reqs), uris(reqs), errs)
 		}
 	}
+}
+
+func uris(reqs []*adapters.RequestData) []string {
+	var out []string
+	for _, r := range reqs {
+		out = append(out, r.Uri)
+	}
+	return out
 }
 
 func TestBuilderRequiresKeys(t *testing.T) {

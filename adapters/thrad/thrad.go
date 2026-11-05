@@ -2,19 +2,11 @@ package thrad
 
 // Package thrad implements a Prebid Server adapter for Thrad (thrad.ai).
 //
-// ── Two protocols, chosen per placement ──────────────────────────────────────
+// ── Protocol ─────────────────────────────────────────────────────────────────
 //
-// Thrad retires bid request protocol v1 on 2026-11-04 in favour of v2. To roll
-// v2 out one placement at a time, this adapter speaks both: v1.go and v2.go.
-// Each imp picks its protocol from its own params (ExtImpThrads.Protocol, set
-// statically in the Stored Imp as "protocol": 2). Imps without it use the
-// adapter's default: v1 for "thrad", v2 for the "thradx" alias (the test-only
-// Stored Imp sayhola-767d5762). Once every placement is on v2, flip the
-// default, then delete v1.go and the Protocol param.
-//
-// Both protocols share key selection: same keys, same pbs.yaml extra_info
-// layout (only the auth header differs — thrad-api-key vs Authorization:
-// Bearer).
+// This adapter speaks Thrad's bid request protocol v2 only (v2.go). v1 was
+// retired by Thrad on 2026-11-04 and removed here once every placement had
+// moved; ExtImpThrads.Protocol is still accepted from Stored Imps but ignored.
 //
 // ── Key selection (per-publisher, then staging vs production) ────────────────
 //
@@ -52,9 +44,6 @@ import (
 	"github.com/prebid/prebid-server/v4/openrtb_ext"
 )
 
-// v1Endpoint is fixed: bidder-info's endpoint is v2's, and v1 is temporary.
-const v1Endpoint = "https://ssp.thrads.ai/api/v1/ssp/bid-request"
-
 // publisherKeys is one Thrad Publisher's production/staging key pair.
 type publisherKeys struct {
 	ProductionKey string `json:"productionKey"`
@@ -68,24 +57,19 @@ type extraInfo struct {
 }
 
 type adapter struct {
-	v2Endpoint      *template.Template
-	v1Endpoint      string
-	keys            extraInfo
-	defaultProtocol int
+	v2Endpoint *template.Template
+	keys       extraInfo
 }
 
 // Builder is the constructor registered with PBS, for "thrad" and its
-// "thradx" alias (bidderName tells them apart).
+// "thradx" alias.
 func Builder(bidderName openrtb_ext.BidderName, cfg config.Adapter, server config.Server) (adapters.Bidder, error) {
 	tmpl, err := template.New("endpointTemplate").Parse(cfg.Endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("thrad: unable to parse endpoint template: %w", err)
 	}
 
-	a := &adapter{v2Endpoint: tmpl, v1Endpoint: v1Endpoint, defaultProtocol: 1}
-	if bidderName == "thradx" {
-		a.defaultProtocol = 2
-	}
+	a := &adapter{v2Endpoint: tmpl}
 
 	if cfg.ExtraAdapterInfo != "" {
 		if err := json.Unmarshal([]byte(cfg.ExtraAdapterInfo), &a.keys); err != nil {
@@ -124,7 +108,7 @@ func (a *adapter) selectKey(request *openrtb2.BidRequest, publisherID string) st
 	return keys.StagingKey
 }
 
-// MakeRequests makes one Thrad call per imp, in that imp's protocol.
+// MakeRequests makes one Thrad call per imp.
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, _ *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
 	var requests []*adapters.RequestData
 	var errs []error
@@ -147,13 +131,7 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, _ *adapters.ExtraRe
 			continue
 		}
 
-		var req *adapters.RequestData
-		var err error
-		if a.protocolFor(params) == 2 {
-			req, err = a.makeRequestV2(request, imp, params)
-		} else {
-			req, err = a.makeRequestV1(request, imp, params)
-		}
+		req, err := a.makeRequestV2(request, imp, params)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -164,18 +142,8 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, _ *adapters.ExtraRe
 	return requests, errs
 }
 
-func (a *adapter) protocolFor(params openrtb_ext.ExtImpThrads) int {
-	if params.Protocol == 1 || params.Protocol == 2 {
-		return params.Protocol
-	}
-	return a.defaultProtocol
-}
-
-// MakeBids parses the response in the protocol its call was made with.
+// MakeBids parses Thrad's v2 response.
 func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.RequestData, response *adapters.ResponseData) (*adapters.BidderResponse, []error) {
-	if requestData != nil && requestData.Uri == a.v1Endpoint {
-		return a.makeBidsV1(request, requestData, response)
-	}
 	return a.makeBidsV2(request, requestData, response)
 }
 

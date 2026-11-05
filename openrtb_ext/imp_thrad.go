@@ -13,10 +13,9 @@ type ExtImpThrads struct {
 	// for it, the adapter falls back to extra_info's top-level default key pair.
 	PublisherID string `json:"publisherId,omitempty"`
 
-	// Protocol selects Thrad's bid request protocol for this placement: 2
-	// (v2) or 1/unset (v1, the default until the cutover; the "thradx" alias
-	// defaults to 2). Static, set in the Stored Imp — lets placements move
-	// to v2 one at a time. Remove once v1 is gone.
+	// Protocol is ignored: the adapter speaks v2 only since v1's removal
+	// (2026-11). Still parsed because Stored Imps carry "protocol": 2 from
+	// the per-placement migration; remove once pbs-settings drops it.
 	Protocol int `json:"protocol,omitempty"`
 
 	// PlacementID is a stable placement identifier sent to Thrad v2 as
@@ -39,9 +38,9 @@ type ExtImpThrads struct {
 	TurnNumber *int              `json:"turnNumber,omitempty"`
 
 	// HashedEmail is a logged-in user's SHA-256(trim(lowercase(email))) hex,
-	// hashed publisher-side (window.tpc.data.hashedEmail). Sent to v2 only,
-	// as user.extended_ids.emails_sha256; v1 has no field for it. Never
-	// required — anonymous users have none.
+	// hashed publisher-side (window.tpc.data.hashedEmail). Sent as
+	// user.extended_ids.emails_sha256. Never required — anonymous users have
+	// none.
 	HashedEmail string `json:"hashedEmail,omitempty"`
 
 	// Optional publisher-side config and user metadata.
