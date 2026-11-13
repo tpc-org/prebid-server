@@ -225,8 +225,19 @@ func TestMissingIVTDirIsNotFatal(t *testing.T) {
 	m := buildIVTModule(t, t.TempDir(), filepath.Join(t.TempDir(), "does-not-exist"))
 	line := runAuction(t, m, `{}`, dcUser, &openrtb2.BidRequest{Device: &openrtb2.Device{IP: dcUser, UA: chromeUA}})
 	u := line["u"].(map[string]interface{})
-	assert.Equal(t, "clean", u["ipc"])
+	assert.Nil(t, u["ipc"], "no lists loaded: no class, rather than a misleading 'clean'")
 	assert.Equal(t, "browser", u["uak"])
+}
+
+func TestUAHashDistinguishesDevicesButHidesTheUA(t *testing.T) {
+	m := buildIVTModule(t, t.TempDir(), writeIVTDir(t, true))
+	a := runAuction(t, m, `{}`, homeUser, &openrtb2.BidRequest{Device: &openrtb2.Device{IP: homeUser, UA: chromeUA}})
+	b := runAuction(t, m, `{}`, homeUser, &openrtb2.BidRequest{Device: &openrtb2.Device{IP: homeUser,
+		UA: strings.Replace(chromeUA, "Windows NT 10.0; Win64; x64", "Macintosh; Intel Mac OS X 10_15_7", 1)}})
+	ua, ub := a["u"].(map[string]interface{}), b["u"].(map[string]interface{})
+	assert.Len(t, ua["uah"], 8)
+	assert.NotEqual(t, ua["uah"], ub["uah"], "same family+major, different device strings")
+	assert.Equal(t, ua["uaf"], ub["uaf"])
 }
 
 func TestListsReloadInBackgroundWhenFilesChange(t *testing.T) {

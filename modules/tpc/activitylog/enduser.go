@@ -22,6 +22,7 @@ package activitylog
 //	p24     device.ip /24 (IPv4) or /48 (IPv6) prefix (decided 2026-11-13)
 //	uak     device.ua kind: browser | http-client | automation | bad-ua | empty | other
 //	uaf/uav device.ua family and major version
+//	uah     short keyed hash of the exact device.ua (one-device dominance)
 //	ifh/ifz keyed hash of device.ifa / ifa is all zeros
 //	ipsrc   where device.ip came from: body | header (PBS fell back to the
 //	        request headers, i.e. the caller didn't send it) | none
@@ -268,6 +269,9 @@ type ivtLists struct {
 	badUA                             *regexp.Regexp
 	keyID                             string
 	key                               []byte
+	// loaded is false when no IP list could be read (directory missing or
+	// not yet published): ipc is then left empty instead of claiming "clean".
+	loaded bool
 }
 
 func loadIVTLists(dir string) *ivtLists {
@@ -279,6 +283,7 @@ func loadIVTLists(dir string) *ivtLists {
 		dc:      loadRanges(dir, ivtFiles.dc),
 		badUA:   compileBadUA(dir),
 	}
+	l.loaded = len(l.relay)+len(l.allow)+len(l.manual)+len(l.crawler)+len(l.dc) > 0
 	// hashkey: one line "<key id> <hex key>" (>= 16 bytes). Missing or short
 	// key: no iph/ifh is written rather than hashing with a weak key.
 	if data, err := os.ReadFile(filepath.Join(dir, ivtFiles.key)); err == nil {
@@ -293,7 +298,7 @@ func loadIVTLists(dir string) *ivtLists {
 
 func (l *ivtLists) ipClass(a netip.Addr) string {
 	switch {
-	case !a.IsValid():
+	case !a.IsValid() || !l.loaded:
 		return ""
 	case l.relay.contains(a):
 		return "relay"
@@ -442,6 +447,7 @@ type endUserLine struct {
 	UAK    string `json:"uak,omitempty"`
 	UAF    string `json:"uaf,omitempty"`
 	UAV    int    `json:"uav,omitempty"`
+	UAH    string `json:"uah,omitempty"` // keyed hash of the exact UA: per-device dominance without storing the UA
 	IFH    string `json:"ifh,omitempty"`
 	IFZ    bool   `json:"ifz,omitempty"`
 	IPSrc  string `json:"ipsrc,omitempty"`
@@ -516,6 +522,9 @@ func (m Module) endUser(req *openrtb2.BidRequest, sig *entrySignals) *endUserLin
 		u.IPH = l.hash(a.String())
 	}
 	u.UAK, u.UAF, u.UAV = classifyUA(ua, l.badUA)
+	if h := l.hash("ua:" + ua); ua != "" && h != "" {
+		u.UAH = h[:8]
+	}
 	if ifa != "" {
 		if strings.Trim(ifa, "0-") == "" {
 			u.IFZ = true
@@ -523,7 +532,7 @@ func (m Module) endUser(req *openrtb2.BidRequest, sig *entrySignals) *endUserLin
 			u.IFH = l.hash("ifa:" + strings.ToLower(ifa))
 		}
 	}
-	if u.IPH != "" || u.IFH != "" {
+	if u.IPH != "" || u.IFH != "" || u.UAH != "" {
 		u.HK = l.keyID
 	}
 	if sig != nil {
