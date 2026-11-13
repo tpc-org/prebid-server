@@ -27,6 +27,10 @@ type config struct {
 	DebugFlagFile    string `json:"debug_flag_file"`
 	DebugWindowHours int    `json:"debug_window_hours"`
 	GeoDBPath        string `json:"geo_db_path"`
+	// IVTDir is an optional directory of IVT lists + the rotating hash key,
+	// published by pbs-settings nginx/ivt (see enduser.go). Empty disables
+	// the end-user `u` object entirely; the log is then unchanged.
+	IVTDir string `json:"ivt_dir"`
 }
 
 const defaultDebugWindowHours = 4
