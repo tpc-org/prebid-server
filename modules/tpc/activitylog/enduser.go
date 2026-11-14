@@ -275,10 +275,11 @@ type ivtLists struct {
 	// not yet published): ipc is then left empty instead of claiming "clean".
 	loaded bool
 	// Enforcement (enforce.go): off unless ivt-enforce.json says otherwise.
-	enforceOn     bool
-	enforceLabels map[string]struct{}
-	breakerLabels map[string]struct{}
-	confirmed     map[string]struct{}
+	enforceOn      bool
+	enforceLabels  map[string]struct{}
+	enforceExclude map[string]struct{}
+	breakerLabels  map[string]struct{}
+	confirmed      map[string]struct{}
 }
 
 func loadIVTLists(dir string) *ivtLists {
