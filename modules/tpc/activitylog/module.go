@@ -206,6 +206,18 @@ func (m Module) HandleProcessedAuctionHook(
 	}
 	if m.ivt != nil {
 		stashed.EndUser = m.endUser(payload.Request.BidRequest, entryFrom(miCtx.ModuleContext))
+		if u := stashed.EndUser; u != nil {
+			lists := m.ivt.get(time.Now())
+			u.Blk = blockReason(u, lists)
+			if u.Blk != "" && lists.enforces(auctionLabels(imps, u)) {
+				// Rejected before any bidder is called; PBS still runs the
+				// auction_response stage, so this line is still logged.
+				u.Enf = true
+				result.Reject = true
+				result.NbrCode = SuspectedIVT
+				result.Message = "suspected invalid traffic: " + u.Blk
+			}
+		}
 	}
 	if debugActive && payload.Request.Device != nil {
 		if payload.Request.Device.IP != "" {
