@@ -37,6 +37,10 @@
 // only stored_imp_id + per-bidder requested/bid counts, plus the auction's
 // resolved country code (geo.go) — no message content, no IPs. This is the sole data source for both the ad-request-
 // count and bid-stats ingestion pipelines (pbs-settings' ingest_activity.py).
+// With ivt_dir configured it also carries a `u` object of end-user IVT
+// signals (enduser.go): list class, /24 prefix and keyed hashes of the
+// device IP and IFA, UA kind/family, and whether device.ip/ua came from the
+// body or PBS's header fallback. Still no full IP and no raw UA.
 //
 // debug.log-YYYYMMDD: written only when a staff-controlled flag file is
 // present and fresh (see isDebugActive) — full per-bidder raw ext content
@@ -85,6 +89,7 @@ func Builder(cfg json.RawMessage, _ moduledeps.ModuleDeps) (interface{}, error) 
 		if db := newGeoDB(c.GeoDBPath); db != nil {
 			m.geo = db
 		}
+		m.ivt = newIVTStore(c.IVTDir)
 	}
 	return m, nil
 }
@@ -94,6 +99,9 @@ type Module struct {
 	// geo resolves device IPs to a country code — nil when no geo_db_path
 	// is configured (see geo.go).
 	geo countryLookup
+	// ivt holds the end-user IVT lists — nil when no ivt_dir is configured
+	// (see enduser.go).
+	ivt *ivtStore
 }
 
 // ── Per-imp data stashed between stages ────────────────────────────────────
@@ -118,13 +126,14 @@ type stashedActivity struct {
 	Country       string                 // ISO-3166 alpha-2, "" if unresolved — see geo.go
 	DebugActive   bool
 	DebugDeviceIP string
+	EndUser       *endUserLine // nil unless ivt_dir is configured — see enduser.go
 }
 
 // ── ProcessedAuctionRequest stage ──────────────────────────────────────────
 
 func (m Module) HandleProcessedAuctionHook(
 	_ context.Context,
-	_ hookstage.ModuleInvocationContext,
+	miCtx hookstage.ModuleInvocationContext,
 	payload hookstage.ProcessedAuctionRequestPayload,
 ) (hookstage.HookResult[hookstage.ProcessedAuctionRequestPayload], error) {
 	result := hookstage.HookResult[hookstage.ProcessedAuctionRequestPayload]{}
@@ -195,6 +204,9 @@ func (m Module) HandleProcessedAuctionHook(
 		Country:     resolveCountry(m.geo, payload.Request.Device),
 		DebugActive: debugActive,
 	}
+	if m.ivt != nil {
+		stashed.EndUser = m.endUser(payload.Request.BidRequest, entryFrom(miCtx.ModuleContext))
+	}
 	if debugActive && payload.Request.Device != nil {
 		if payload.Request.Device.IP != "" {
 			stashed.DebugDeviceIP = payload.Request.Device.IP
@@ -257,6 +269,7 @@ type activityLine struct {
 	Timestamp string            `json:"ts"`
 	Country   string            `json:"country,omitempty"`
 	Imps      []activityImpLine `json:"imps"`
+	U         *endUserLine      `json:"u,omitempty"`
 }
 
 func bidCountsByImpAndSeat(resp *openrtb2.BidResponse) map[string]map[string]int {
@@ -278,7 +291,7 @@ func bidCountsByImpAndSeat(resp *openrtb2.BidResponse) map[string]map[string]int
 func (m Module) writeActivityLine(stashed stashedActivity, resp *openrtb2.BidResponse) {
 	bidCounts := bidCountsByImpAndSeat(resp)
 
-	line := activityLine{Timestamp: time.Now().UTC().Format(time.RFC3339), Country: stashed.Country}
+	line := activityLine{Timestamp: time.Now().UTC().Format(time.RFC3339), Country: stashed.Country, U: stashed.EndUser}
 	for _, activity := range stashed.Imps {
 		if activity.StoredImpID == "" {
 			continue
