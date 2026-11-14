@@ -11,7 +11,9 @@ package activitylog
 //   - ivt-enforce.json in ivt_dir has "mode": "enforce" (the global kill
 //     switch: anything else, or a missing/unreadable file, means monitor);
 //   - one of the auction's labels (a stored_imp_id, or site:<domain> /
-//     app:<bundle> for auctions without one) is listed in its "labels";
+//     app:<bundle> for auctions without one) is listed in its "labels",
+//     or "labels" contains "*" (every auction, including DSP in-app
+//     traffic without a placement) and none of its labels is in "exclude";
 //   - that label is not listed in ivt-breaker.json (the circuit breaker the
 //     hosts write when a placement's blocked share spikes);
 //   - blockReason() returns a reason.
@@ -36,8 +38,9 @@ import (
 const SuspectedIVT = 502
 
 type enforceConfig struct {
-	Mode   string   `json:"mode"`
-	Labels []string `json:"labels"`
+	Mode    string   `json:"mode"`
+	Labels  []string `json:"labels"`
+	Exclude []string `json:"exclude"` // with "*": labels kept in monitor
 }
 
 type breakerConfig struct {
@@ -61,6 +64,7 @@ func loadEnforcement(dir string, l *ivtLists) {
 	if data, err := os.ReadFile(filepath.Join(dir, "ivt-enforce.json")); err == nil && json.Unmarshal(data, &ec) == nil {
 		l.enforceOn = ec.Mode == "enforce"
 		l.enforceLabels = toSet(ec.Labels)
+		l.enforceExclude = toSet(ec.Exclude)
 	}
 	var bc breakerConfig
 	if data, err := os.ReadFile(filepath.Join(dir, "ivt-breaker.json")); err == nil && json.Unmarshal(data, &bc) == nil {
@@ -102,6 +106,18 @@ func blockReason(u *endUserLine, l *ivtLists) string {
 func (l *ivtLists) enforces(labels []string) bool {
 	if l == nil || !l.enforceOn {
 		return false
+	}
+	if _, all := l.enforceLabels["*"]; all {
+		// Every auction, unless one of its labels is excluded or tripped.
+		for _, label := range labels {
+			if _, ex := l.enforceExclude[label]; ex {
+				return false
+			}
+			if _, tripped := l.breakerLabels[label]; tripped {
+				return false
+			}
+		}
+		return true
 	}
 	for _, label := range labels {
 		if _, on := l.enforceLabels[label]; !on {

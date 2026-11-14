@@ -133,6 +133,25 @@ func TestConfirmedBehaviourHashIsBlocked(t *testing.T) {
 	assert.False(t, proc.Reject, "another data-centre user on probation is served")
 }
 
+func TestWildcardEnforcesEverythingExceptExcludedAndTripped(t *testing.T) {
+	d := writeIVTDir(t, true)
+	require.NoError(t, os.WriteFile(filepath.Join(d, "ivt-enforce.json"),
+		[]byte(`{"mode":"enforce","labels":["*"],"exclude":["pub-excluded"]}`), 0644))
+	l := loadIVTLists(d)
+	assert.True(t, l.enforces([]string{"any-placement"}))
+	assert.True(t, l.enforces([]string{"app:com.dsp.app"}), "DSP in-app without a placement")
+	assert.True(t, l.enforces(nil), "even an auction with no labels at all")
+	assert.False(t, l.enforces([]string{"pub-excluded", "site:x.example"}), "excluded placement stays in monitor")
+
+	require.NoError(t, os.WriteFile(filepath.Join(d, "ivt-breaker.json"), []byte(`{"labels":["any-placement"]}`), 0644))
+	l = loadIVTLists(d)
+	assert.False(t, l.enforces([]string{"any-placement"}), "breaker still wins")
+	assert.True(t, l.enforces([]string{"other"}))
+
+	require.NoError(t, os.WriteFile(filepath.Join(d, "ivt-enforce.json"), []byte(`{"mode":"monitor","labels":["*"]}`), 0644))
+	assert.False(t, loadIVTLists(d).enforces([]string{"any-placement"}), "global switch still governs")
+}
+
 func TestAuctionLabels(t *testing.T) {
 	imps := map[string]impActivity{"1": {StoredImpID: "pub-a"}, "2": {StoredImpID: ""}}
 	assert.ElementsMatch(t, []string{"pub-a", "site:x.example"}, auctionLabels(imps, &endUserLine{Dom: "x.example"}))
