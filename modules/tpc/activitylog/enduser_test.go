@@ -176,6 +176,25 @@ func TestServerSideWithoutDeviceIsFlaggedAsHeaderFallback(t *testing.T) {
 	assert.Equal(t, true, u["fwd"])
 }
 
+func TestConnectingPeerSkipsOurOwnPrivateHops(t *testing.T) {
+	// production chain: caller-sent entry, ALB-appended peer, nginx-appended ALB private IP
+	assert.Equal(t, forwarder, connectingPeer("192.0.2.44, "+forwarder+", 10.0.1.25", "127.0.0.1:5000").String())
+	assert.Equal(t, forwarder, connectingPeer(forwarder+", 172.31.9.8", "127.0.0.1:5000").String())
+	assert.Equal(t, forwarder, connectingPeer(forwarder, "").String())
+	assert.Equal(t, "127.0.0.1", connectingPeer("10.0.0.1", "127.0.0.1:5000").String(), "no public hop: RemoteAddr")
+	assert.False(t, connectingPeer("", "").IsValid())
+}
+
+func TestForwarderDetectedBehindNginxAndALB(t *testing.T) {
+	m := buildIVTModule(t, t.TempDir(), writeIVTDir(t, true))
+	body := `{"device":{"ip":"192.0.2.44","ua":"` + chromeUA + `"},"site":{"domain":"pub.example"}}`
+	line := runAuction(t, m, body, forwarder+", 10.0.1.25", &openrtb2.BidRequest{
+		Site:   &openrtb2.Site{Domain: "pub.example"},
+		Device: &openrtb2.Device{IP: homeUser, UA: chromeUA},
+	})
+	assert.Equal(t, true, line["u"].(map[string]interface{})["fwd"])
+}
+
 func TestAppTrafficBundleAndIFA(t *testing.T) {
 	m := buildIVTModule(t, t.TempDir(), writeIVTDir(t, true))
 	body := `{"app":{"bundle":"com.example.app"},"device":{"ip":"192.0.2.44","ifa":"AAAA-1111"}}`
