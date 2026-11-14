@@ -410,20 +410,33 @@ func (m Module) HandleEntrypointHook(
 		BodyUA: jsonString(payload.Body, "device", "ua") != "",
 	}
 	if payload.Request != nil {
-		xff := strings.Split(payload.Request.Header.Get("X-Forwarded-For"), ",")
-		if last := strings.TrimSpace(xff[len(xff)-1]); last != "" {
-			sig.Peer, _ = netip.ParseAddr(last)
-		}
-		if !sig.Peer.IsValid() {
-			if ap, err := netip.ParseAddrPort(payload.Request.RemoteAddr); err == nil {
-				sig.Peer = ap.Addr()
-			}
-		}
+		sig.Peer = connectingPeer(payload.Request.Header.Get("X-Forwarded-For"), payload.Request.RemoteAddr)
 	}
 	mc := hookstage.NewModuleContext()
 	mc.Set(entryContextKey, sig)
 	result.ModuleContext = mc
 	return result, nil
+}
+
+// connectingPeer is the address that connected to our edge: the RIGHTMOST
+// public entry of X-Forwarded-For. In production the chain reaching PBS is
+// "<whatever the caller sent>, <peer appended by the ALB>, <ALB's private
+// address appended by nginx>", so the last entry is our own load balancer;
+// private/loopback hops are ours and are skipped. Falls back to RemoteAddr.
+func connectingPeer(xff, remoteAddr string) netip.Addr {
+	parts := strings.Split(xff, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if a, err := netip.ParseAddr(strings.TrimSpace(parts[i])); err == nil {
+			a = a.Unmap()
+			if a.IsGlobalUnicast() && !a.IsPrivate() {
+				return a
+			}
+		}
+	}
+	if ap, err := netip.ParseAddrPort(remoteAddr); err == nil {
+		return ap.Addr().Unmap()
+	}
+	return netip.Addr{}
 }
 
 func jsonString(body []byte, keys ...string) string {
