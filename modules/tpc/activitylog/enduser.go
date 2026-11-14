@@ -28,6 +28,8 @@ package activitylog
 //	        request headers, i.e. the caller didn't send it) | none
 //	uasrc   same for device.ua
 //	fwd     the connection came from a known forwarder (ivt-allow.manual)
+//	blk     the reason this auction WOULD be blocked ("" = not), always set
+//	enf     the auction WAS rejected (enforcement on for its placement)
 //
 // No full IP and no raw UA is ever written. Nothing here blocks: verdicts
 // are computed from these fields by pbs-settings' nginx/ivt/ivt_report.py.
@@ -272,6 +274,11 @@ type ivtLists struct {
 	// loaded is false when no IP list could be read (directory missing or
 	// not yet published): ipc is then left empty instead of claiming "clean".
 	loaded bool
+	// Enforcement (enforce.go): off unless ivt-enforce.json says otherwise.
+	enforceOn     bool
+	enforceLabels map[string]struct{}
+	breakerLabels map[string]struct{}
+	confirmed     map[string]struct{}
 }
 
 func loadIVTLists(dir string) *ivtLists {
@@ -284,6 +291,7 @@ func loadIVTLists(dir string) *ivtLists {
 		badUA:   compileBadUA(dir),
 	}
 	l.loaded = len(l.relay)+len(l.allow)+len(l.manual)+len(l.crawler)+len(l.dc) > 0
+	loadEnforcement(dir, l)
 	// hashkey: one line "<key id> <hex key>" (>= 16 bytes). Missing or short
 	// key: no iph/ifh is written rather than hashing with a weak key.
 	if data, err := os.ReadFile(filepath.Join(dir, ivtFiles.key)); err == nil {
@@ -466,6 +474,8 @@ type endUserLine struct {
 	IPSrc  string `json:"ipsrc,omitempty"`
 	UASrc  string `json:"uasrc,omitempty"`
 	Fwd    bool   `json:"fwd,omitempty"`
+	Blk    string `json:"blk,omitempty"` // shadow verdict: why it WOULD be blocked (enforce.go)
+	Enf    bool   `json:"enf,omitempty"` // true only when this auction was actually rejected
 }
 
 func clip(s string) string {
