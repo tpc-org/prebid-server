@@ -208,8 +208,9 @@ func (m Module) HandleProcessedAuctionHook(
 		stashed.EndUser = m.endUser(payload.Request.BidRequest, entryFrom(miCtx.ModuleContext))
 		if u := stashed.EndUser; u != nil {
 			lists := m.ivt.get(time.Now())
-			u.Blk = blockReason(u, lists)
-			if u.Blk != "" && lists.enforces(auctionLabels(imps, u)) {
+			labels := auctionLabels(imps, u)
+			u.Blk = blockReason(u, lists, labels...)
+			if u.Blk != "" && lists.enforces(labels) {
 				// Rejected before any bidder is called; PBS still runs the
 				// auction_response stage, so this line is still logged.
 				u.Enf = true

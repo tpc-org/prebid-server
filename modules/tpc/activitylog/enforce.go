@@ -23,6 +23,11 @@ package activitylog
 // never blocked, nor is Apple Private Relay or a forwarder's own address.
 // Behaviour blocks use the confirmed-bot hashes the hosts publish hourly
 // (confirmed.txt, "<hk>:<iph>" per line), keyed on this week's hash key.
+// UA-cluster blocks (confirmed-ua.json, {"clusters":[{hk,uah,label}]}) catch a
+// bot spread over many IPs: one exact, outdated UA concentrated on one
+// placement. Each entry only blocks that exact UA hash on that one label.
+// The hosts publish entries only when ivt-enforce.json has "cluster":
+// "enforce" (pbs-settings nginx/ivt ivtlib.ClusterPolicy).
 // The forwarding server always gets a normal no-bid response; its
 // connection is never refused. Fail-open: any missing file means no block.
 
@@ -45,6 +50,30 @@ type enforceConfig struct {
 
 type breakerConfig struct {
 	Labels []string `json:"labels"`
+}
+
+type uaClusterConfig struct {
+	Clusters []struct {
+		HK    string `json:"hk"`
+		UAH   string `json:"uah"`
+		Label string `json:"label"`
+	} `json:"clusters"`
+}
+
+// toUAClusters indexes confirmed-ua.json as "<hk>:<uah>" -> labels.
+func toUAClusters(c uaClusterConfig) map[string]map[string]struct{} {
+	out := map[string]map[string]struct{}{}
+	for _, e := range c.Clusters {
+		if e.HK == "" || e.UAH == "" || e.Label == "" {
+			continue
+		}
+		k := e.HK + ":" + e.UAH
+		if out[k] == nil {
+			out[k] = map[string]struct{}{}
+		}
+		out[k][e.Label] = struct{}{}
+	}
+	return out
 }
 
 func toSet(items []string) map[string]struct{} {
@@ -73,11 +102,17 @@ func loadEnforcement(dir string, l *ivtLists) {
 	if data, err := os.ReadFile(filepath.Join(dir, "confirmed.txt")); err == nil {
 		l.confirmed = toSet(strings.Split(string(data), "\n"))
 	}
+	var uc uaClusterConfig
+	if data, err := os.ReadFile(filepath.Join(dir, "confirmed-ua.json")); err == nil && json.Unmarshal(data, &uc) == nil {
+		l.confirmedUA = toUAClusters(uc)
+	}
 }
 
 // blockReason is the in-process verdict: the reason this auction would be
 // blocked, or "" if it would not. Same order as ivt_enduser.list_class().
-func blockReason(u *endUserLine, l *ivtLists) string {
+// labels are the auction's labels (auctionLabels); only UA-cluster entries
+// use them, since each is scoped to one placement.
+func blockReason(u *endUserLine, l *ivtLists, labels ...string) string {
 	if u == nil || l == nil {
 		return ""
 	}
@@ -96,6 +131,15 @@ func blockReason(u *endUserLine, l *ivtLists) string {
 	if (u.IPC == "dc" || u.IPC == "clean") && u.IPH != "" && u.HK != "" {
 		if _, ok := l.confirmed[u.HK+":"+u.IPH]; ok {
 			return "behaviour-" + u.IPC
+		}
+	}
+	if (u.IPC == "dc" || u.IPC == "clean") && u.UAH != "" && u.HK != "" {
+		if scoped, ok := l.confirmedUA[u.HK+":"+u.UAH]; ok {
+			for _, label := range labels {
+				if _, on := scoped[label]; on {
+					return "behaviour-cluster"
+				}
+			}
 		}
 	}
 	return ""

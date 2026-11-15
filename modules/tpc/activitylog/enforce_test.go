@@ -2,6 +2,7 @@ package activitylog
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"net/netip"
 	"os"
@@ -156,4 +157,53 @@ func TestAuctionLabels(t *testing.T) {
 	imps := map[string]impActivity{"1": {StoredImpID: "pub-a"}, "2": {StoredImpID: ""}}
 	assert.ElementsMatch(t, []string{"pub-a", "site:x.example"}, auctionLabels(imps, &endUserLine{Dom: "x.example"}))
 	assert.ElementsMatch(t, []string{"app:com.y"}, auctionLabels(map[string]impActivity{}, &endUserLine{Bundle: "com.y"}))
+}
+
+func TestUAClusterBlocksThatUAOnThatPlacementOnly(t *testing.T) {
+	var cfg uaClusterConfig
+	require.NoError(t, json.Unmarshal([]byte(`{"clusters":[{"hk":"2026w46","uah":"c150abcd","label":"promptessor-bfc732a4"}]}`), &cfg))
+	l := &ivtLists{confirmedUA: toUAClusters(cfg)}
+	bot := endUserLine{IPC: "clean", IPH: "fresh-ip", UAH: "c150abcd", HK: "2026w46"}
+	assert.Equal(t, "behaviour-cluster", blockReason(&bot, l, "promptessor-bfc732a4"), "new IP, same UA, same placement")
+	assert.Equal(t, "", blockReason(&bot, l, "other-native"), "same UA on another placement is not blocked")
+	assert.Equal(t, "", blockReason(&bot, l), "no labels: no cluster match")
+	human := endUserLine{IPC: "clean", IPH: "fresh-ip", UAH: "c157ffff", HK: "2026w46"}
+	assert.Equal(t, "", blockReason(&human, l, "promptessor-bfc732a4"), "current UA on the placement passes")
+	nextWeek := bot
+	nextWeek.HK = "2026w47"
+	assert.Equal(t, "", blockReason(&nextWeek, l, "promptessor-bfc732a4"), "other week's key never matches")
+	relay := bot
+	relay.IPC = "relay"
+	assert.Equal(t, "", blockReason(&relay, l, "promptessor-bfc732a4"), "Private Relay stays exempt")
+	unverifiable := bot
+	unverifiable.Fwd, unverifiable.IPSrc = true, "header"
+	assert.Equal(t, "", blockReason(&unverifiable, l, "promptessor-bfc732a4"), "unverifiable stays exempt")
+}
+
+func TestUAClusterRejectsANewIPEndToEnd(t *testing.T) {
+	d := writeIVTDir(t, true)
+	uah := loadIVTLists(d).hash("ua:" + chromeUA)[:8]
+	require.NoError(t, os.WriteFile(filepath.Join(d, "confirmed-ua.json"),
+		[]byte(`{"clusters":[{"hk":"2026w46","uah":"`+uah+`","label":"pub-1234abcd"}]}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(d, "ivt-enforce.json"), []byte(`{"mode":"enforce","labels":["pub-1234abcd"]}`), 0644))
+	m := buildIVTModule(t, t.TempDir(), d)
+	// 198.51.100.8 has never been confirmed: only the UA cluster can block it.
+	proc, _ := processOnly(t, m, "198.51.100.8", &openrtb2.BidRequest{Device: &openrtb2.Device{IP: "198.51.100.8", UA: chromeUA}})
+	assert.True(t, proc.Reject)
+	assert.Contains(t, proc.Message, "behaviour-cluster")
+	proc, _ = processOnly(t, m, "198.51.100.8", &openrtb2.BidRequest{Device: &openrtb2.Device{IP: "198.51.100.8", UA: chromeUA + " other"}})
+	assert.False(t, proc.Reject, "a different exact UA from the same IP is served")
+}
+
+func TestConfirmedUAJSONIsLoadedAndToleratesBadInput(t *testing.T) {
+	d := writeIVTDir(t, true)
+	require.NoError(t, os.WriteFile(filepath.Join(d, "confirmed-ua.json"),
+		[]byte(`{"clusters":[{"hk":"2026w46","uah":"c150abcd","label":"pt-native"},{"hk":"","uah":"x","label":"y"}]}`), 0644))
+	l := loadIVTLists(d)
+	assert.Len(t, l.confirmedUA, 1, "incomplete entries are skipped")
+	_, ok := l.confirmedUA["2026w46:c150abcd"]["pt-native"]
+	assert.True(t, ok)
+
+	require.NoError(t, os.WriteFile(filepath.Join(d, "confirmed-ua.json"), []byte(`not json`), 0644))
+	assert.Empty(t, loadIVTLists(d).confirmedUA, "unreadable file: fail open, no cluster blocks")
 }

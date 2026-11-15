@@ -280,6 +280,7 @@ type ivtLists struct {
 	enforceExclude map[string]struct{}
 	breakerLabels  map[string]struct{}
 	confirmed      map[string]struct{}
+	confirmedUA    map[string]map[string]struct{} // "<hk>:<uah>" -> labels (confirmed-ua.json)
 }
 
 func loadIVTLists(dir string) *ivtLists {
