@@ -101,9 +101,9 @@ revert-the-revert + cherry-pick instead).
 
 ## How this fork relates to the rest of the TPC stack
 tpc-org/prebid-server (this fork — the Go source)
-│ git push to bare repos on EC2 hosts
+│ pinned image released per region (release-uploads + deploy.py)
 ▼
-post-receive hooks check out, run /var/www/pbs/deploy.sh
+deploy.py prepare / activate swaps the container
 │
 ▼
 Docker container 'prebid-go' on each EC2 (us-east-1, eu-central-1)
@@ -113,10 +113,9 @@ Docker container 'prebid-go' on each EC2 (us-east-1, eu-central-1)
 tpc-org/pbs-settings (runtime config — pbs.yaml, stored imps,
 stored requests, deploy.sh)
 PBS runtime config is **not** in this repo. It lives in `tpc-org/pbs-settings`
-and is deployed via a separate git-push-deploy mechanism with its own bare
-repos and post-receive hooks. The deploy script (`deploy.sh`) is also
-managed there — it's installed onto each EC2 host by the pbs-settings
-post-receive hook on every push.
+and is released per region through its own trusted release tooling (see
+its `CLAUDE.md` and `scripts/README.md`). An ordinary settings push no
+longer installs `deploy.sh`.
 
 Companion repos:
 - **tpc-org/Prebid.js** — fork of `prebid/Prebid.js` (client-side library)
@@ -126,31 +125,39 @@ Companion repos:
 
 ## Deploy mechanism
 
-Push to the `production` git remote on this repo's local clone deploys to
-both EC2 regions simultaneously:
+**Do not `git push production` (or `us-east` / `eu-central`) from this
+repo.** Since November 2026, PBS images are released as an uploaded, pinned
+image, one region at a time with a separate approval for each. A push to a
+deploy remote's `main` still triggers the old post-receive rebuild on the
+host, which would replace the released image with one built from git on the
+host, outside the release checks.
 
-```bash
-git push production master:main
-```
+Release outline (exact commands live with the release owner):
 
-Two bare repos exist — one per EC2 host at `/home/git/pbs/`. Each has a
-post-receive hook that:
+1. Merge to `master`. Build from a **clean clone** at the merge commit:
+   `docker buildx build --platform linux/amd64 --load --build-arg TEST=false
+   --build-arg REVISION=<full sha> --build-arg VERSION=<git describe>`.
+   `scripts/check-release-source.sh <sha>` must pass on the packaged source.
+2. Smoke-test the image locally with `--network none` (`/status` and
+   `/version` return 200, plus any feature check).
+3. Package the image archive, source archive, manifest, `deploy.py` and
+   `probe.py` into the host's release-uploads directory. Then run
+   `deploy.py self-test` and `deploy.py prepare` (network-isolated startup;
+   production unchanged).
+4. `deploy.py activate` swaps the container and keeps
+   `prebid-go-rollback-<release>` for rollback. Verify, observe, then repeat
+   for the other region.
+5. Afterwards, bring the hosts' git deploy refs up to date **without
+   triggering the hook**. Push the commit to a non-`main` branch (the hook
+   skips it), move `main` on the host with `git update-ref`, then delete
+   the temporary branch.
 
-1. Checks out the pushed branch into `/var/www/pbs/src/`
-2. Runs `/var/www/pbs/deploy.sh` (which is itself managed by pbs-settings)
+Regions can intentionally run different images during a rollout. Check the
+running container's `org.opencontainers.image.revision` label, not the git
+ref, to see what is live.
 
-The local `master:main` mapping is because this repo's local clone uses
-`master` (to match upstream's convention) but the EC2 bare repos expect
-`main` (matching the deploy hook's `DEPLOY_ALLOWED_BRANCH=main`).
-
-Configure once locally:
-```bash
-git config remote.production.push refs/heads/master:refs/heads/main
-git config remote.us-east.push    refs/heads/master:refs/heads/main
-git config remote.eu-central.push refs/heads/master:refs/heads/main
-```
-
-After this, `git push production` (no refspec needed) does the right thing.
+The local `master` vs remote `main` naming is unchanged: the bare repos on
+the hosts use `main`.
 
 ## Docker build — IMPORTANT
 
@@ -212,7 +219,7 @@ for each type.
 The filesystem backend in PBS reads `<configured-dir>/*.json` only —
 files in subdirectories are ignored. This is why pbs-settings keeps
 per-client subdirs in the repo (for organisation) but flattens them
-at deploy time via the post-receive hook.
+at release time (its release tooling rebuilds the flat inventory).
 
 If you add files manually on the EC2 host, put them flat in
 `/var/www/pbs/config/stored_requests/` or `/var/www/pbs/config/stored_imps/`,
