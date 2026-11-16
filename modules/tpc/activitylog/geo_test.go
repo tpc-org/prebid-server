@@ -107,3 +107,103 @@ func TestTestFlaggedRequestStillSkippedWithGeo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result.ModuleContext)
 }
+
+// ── Country on the bid request (HOL-144) ───────────────────────────────────
+
+// requestAfterHook runs the processed-auction hook and applies its mutations,
+// returning the request as bidders would receive it.
+func requestAfterHook(t *testing.T, module Module, req *openrtb2.BidRequest) *openrtb2.BidRequest {
+	t.Helper()
+	payload := hookstage.ProcessedAuctionRequestPayload{Request: &openrtb_ext.RequestWrapper{BidRequest: req}}
+	result, err := module.HandleProcessedAuctionHook(context.Background(), hookstage.ModuleInvocationContext{}, payload)
+	require.NoError(t, err)
+	for _, mutation := range result.ChangeSet.Mutations() {
+		payload, err = mutation.Apply(payload)
+		require.NoError(t, err)
+	}
+	return payload.Request.BidRequest
+}
+
+func geoRequest(device *openrtb2.Device) *openrtb2.BidRequest {
+	return &openrtb2.BidRequest{ID: "r", Imp: []openrtb2.Imp{impWithBidders("imp1", "sayhola-9243e9b6", "thrad")}, Device: device}
+}
+
+func TestBidRequestGetsAlpha3CountryFromIP(t *testing.T) {
+	module := buildModule(t, t.TempDir(), "")
+	module.geo = fakeLookup{"203.0.113.5": "US", "2001:db8::1": "DE"}
+
+	original := &openrtb2.Device{IP: "203.0.113.5"}
+	out := requestAfterHook(t, module, geoRequest(original))
+	require.NotNil(t, out.Device.Geo)
+	assert.Equal(t, "USA", out.Device.Geo.Country)
+	assert.Nil(t, original.Geo, "the caller's device object must not be written through")
+
+	out = requestAfterHook(t, module, geoRequest(&openrtb2.Device{IPv6: "2001:db8::1"}))
+	assert.Equal(t, "DEU", out.Device.Geo.Country)
+}
+
+func TestBidRequestCountryKeepsOtherGeoFields(t *testing.T) {
+	module := buildModule(t, t.TempDir(), "")
+	module.geo = fakeLookup{"203.0.113.5": "US"}
+	out := requestAfterHook(t, module, geoRequest(&openrtb2.Device{IP: "203.0.113.5", Geo: &openrtb2.Geo{Region: "CA"}}))
+	assert.Equal(t, "USA", out.Device.Geo.Country)
+	assert.Equal(t, "CA", out.Device.Geo.Region)
+}
+
+func TestBidRequestCountryNeverOverwritesCaller(t *testing.T) {
+	module := buildModule(t, t.TempDir(), "")
+	module.geo = fakeLookup{"203.0.113.5": "US"}
+	for _, sent := range []string{"DEU", "DE"} {
+		out := requestAfterHook(t, module, geoRequest(&openrtb2.Device{IP: "203.0.113.5", Geo: &openrtb2.Geo{Country: sent}}))
+		assert.Equal(t, sent, out.Device.Geo.Country)
+	}
+}
+
+func TestBidRequestUntouchedWithoutResolvableCountry(t *testing.T) {
+	module := buildModule(t, t.TempDir(), "")
+	for name, tc := range map[string]struct {
+		lookup countryLookup
+		device *openrtb2.Device
+	}{
+		"no database":          {nil, &openrtb2.Device{IP: "203.0.113.5"}},
+		"missing database":     {newGeoDB(filepath.Join(t.TempDir(), "absent.mmdb")), &openrtb2.Device{IP: "203.0.113.5"}},
+		"unknown IP":           {fakeLookup{}, &openrtb2.Device{IP: "203.0.113.5"}},
+		"not a country (EU)":   {fakeLookup{"203.0.113.5": "EU"}, &openrtb2.Device{IP: "203.0.113.5"}},
+		"no device":            {fakeLookup{"203.0.113.5": "US"}, nil},
+		"device without an IP": {fakeLookup{"203.0.113.5": "US"}, &openrtb2.Device{UA: "x"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			module.geo = tc.lookup
+			out := requestAfterHook(t, module, geoRequest(tc.device))
+			if out.Device != nil {
+				assert.Nil(t, out.Device.Geo)
+			}
+		})
+	}
+}
+
+// A test auction is not logged, but its bidders still get the country:
+// Kontext certifies on test: 1 traffic.
+func TestTestFlaggedRequestStillGetsBidRequestCountry(t *testing.T) {
+	dir := t.TempDir()
+	module := buildModule(t, dir, "")
+	module.geo = fakeLookup{"203.0.113.5": "US"}
+	req := geoRequest(&openrtb2.Device{IP: "203.0.113.5"})
+	req.Test = 1
+	out := requestAfterHook(t, module, req)
+	assert.Equal(t, "USA", out.Device.Geo.Country)
+	assert.Empty(t, readLines(t, dir, "activity"))
+}
+
+// The alpha-2 code in activity.log is unchanged by the alpha-3 on the request.
+func TestActivityLineCountryStaysAlpha2(t *testing.T) {
+	dir := t.TempDir()
+	module := buildModule(t, dir, "")
+	module.geo = fakeLookup{"203.0.113.5": "US"}
+	result := processRequest(t, module, []openrtb2.Imp{impWithBidders("imp1", "sayhola-9243e9b6", "thrad")})
+	require.Len(t, result.ChangeSet.Mutations(), 1)
+	processResponse(t, module, result.ModuleContext, &openrtb2.BidResponse{SeatBid: []openrtb2.SeatBid{seatBid("thrad", "imp1")}})
+	lines := readLines(t, dir, "activity")
+	require.Len(t, lines, 1)
+	assert.Equal(t, "US", lines[0]["country"])
+}

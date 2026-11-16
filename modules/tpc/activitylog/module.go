@@ -140,6 +140,13 @@ func (m Module) HandleProcessedAuctionHook(
 	if !m.cfg.Enabled || payload.Request == nil {
 		return result, nil
 	}
+	// Before the test-traffic return below: a test auction is not logged, but
+	// its bidders still need the country (see geo.go, "Country on the bid
+	// request").
+	if country := bidderCountry(m.geo, payload.Request.Device); country != "" {
+		result.ChangeSet.AddMutation(setDeviceCountry(country), hookstage.MutationUpdate,
+			"bidrequest", "device", "geo", "country")
+	}
 	if payload.Request.Test == 1 {
 		// OpenRTB test-flagged traffic (e.g. adapters/tpctest verification
 		// requests, merged onto a real Stored Imp) never gets logged here,
