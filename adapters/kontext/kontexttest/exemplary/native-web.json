@@ -167,9 +167,13 @@
                   "id": "01a1d73c-b8b0-78ed-931e-229cc427db7d",
                   "impid": "imp-1",
                   "price": 3.5,
-                  "adm": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"title\":{\"text\":\"Product title\"}}],\"link\":{\"url\":\"https://click.adserver.example/c?id=778\"}}",
+                  "nurl": "https://rtb.kontext.ai/n/win?sig=abc123&imp=778&p=${AUCTION_PRICE}",
+                  "burl": "https://rtb.kontext.ai/n/bill?sig=def456&imp=778&p=${AUCTION_PRICE}",
+                  "lurl": "https://rtb.kontext.ai/n/loss?sig=ghi789&imp=778&p=${AUCTION_PRICE}&l=${AUCTION_LOSS}",
+                  "adm": "{\"assets\":[{\"id\":0,\"title\":{\"text\":\"Product title\"}},{\"id\":1,\"img\":{\"h\":628,\"type\":3,\"url\":\"https://cdn.adserver.example/creative/778.jpg\",\"w\":1200}},{\"data\":{\"type\":12,\"value\":\"Learn more\"},\"id\":4}],\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://imp.adserver.example/i?id=778\"},{\"event\":1,\"method\":1,\"url\":\"https://rtb.kontext.ai/n/imp?sig=jkl012\"}],\"link\":{\"url\":\"https://click.adserver.example/c?id=778\"},\"ver\":\"1.2\"}",
                   "adomain": [
-                    "brand.example.com"
+                    "brand.example.com",
+                    "brand-shop.example.com"
                   ],
                   "crid": "778",
                   "cat": [
@@ -193,9 +197,13 @@
             "id": "01a1d73c-b8b0-78ed-931e-229cc427db7d",
             "impid": "imp-1",
             "price": 3.5,
-            "adm": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"title\":{\"text\":\"Product title\"}}],\"link\":{\"url\":\"https://click.adserver.example/c?id=778\"}}",
+            "nurl": "https://rtb.kontext.ai/n/win?sig=abc123&imp=778&p=3.5",
+            "burl": "https://rtb.kontext.ai/n/bill?sig=def456&imp=778&p=3.5",
+            "lurl": "https://rtb.kontext.ai/n/loss?sig=ghi789&imp=778&p=3.5&l=${AUCTION_LOSS}",
+            "adm": "{\"assets\":[{\"id\":0,\"title\":{\"text\":\"Product title\"}},{\"id\":1,\"img\":{\"h\":628,\"type\":3,\"url\":\"https://cdn.adserver.example/creative/778.jpg\",\"w\":1200}},{\"data\":{\"type\":12,\"value\":\"Learn more\"},\"id\":4}],\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://imp.adserver.example/i?id=778\"},{\"event\":1,\"method\":1,\"url\":\"https://rtb.kontext.ai/n/imp?sig=jkl012\"}],\"ext\":{\"kontext\":{\"lurl\":\"https://rtb.kontext.ai/n/loss?sig=ghi789&imp=778&p=3.5&l=${AUCTION_LOSS}\",\"nurl\":\"https://rtb.kontext.ai/n/win?sig=abc123&imp=778&p=3.5\",\"seat\":\"1099\"}},\"link\":{\"url\":\"https://click.adserver.example/c?id=778\"},\"ver\":\"1.2\"}",
             "adomain": [
-              "brand.example.com"
+              "brand.example.com",
+              "brand-shop.example.com"
             ],
             "crid": "778",
             "cat": [

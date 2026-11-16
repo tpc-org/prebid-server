@@ -25,11 +25,16 @@
 //
 // User identifiers (user.id, user.eids with hashed emails) and privacy
 // signals are passed through exactly as PBS hands them over.
+//
+// The bid side is described on prepareBid.
 package kontext
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
@@ -221,16 +226,131 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 	if err := jsonutil.Unmarshal(response.Body, &bidResp); err != nil {
 		return nil, []error{&errortypes.BadServerResponse{Message: fmt.Sprintf("kontext: failed to parse response: %s", err)}}
 	}
+	// Kontext always answers in USD. Anything else cannot be priced.
+	if bidResp.Cur != "" && bidResp.Cur != "USD" {
+		return nil, []error{&errortypes.BadServerResponse{Message: fmt.Sprintf("kontext: unexpected response currency %q", bidResp.Cur)}}
+	}
 
+	offered := make(map[string]struct{}, len(request.Imp))
+	for i := range request.Imp {
+		if request.Imp[i].Native != nil {
+			offered[request.Imp[i].ID] = struct{}{}
+		}
+	}
+
+	var errs []error
 	bidderResponse := adapters.NewBidderResponseWithBidsCapacity(len(request.Imp))
 	bidderResponse.Currency = "USD"
 	for i := range bidResp.SeatBid {
+		seat := bidResp.SeatBid[i].Seat
 		for j := range bidResp.SeatBid[i].Bid {
+			bid := &bidResp.SeatBid[i].Bid[j]
+			if err := prepareBid(bid, seat, offered); err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			bidderResponse.Bids = append(bidderResponse.Bids, &adapters.TypedBid{
-				Bid:     &bidResp.SeatBid[i].Bid[j],
+				Bid:     bid,
 				BidType: openrtb_ext.BidTypeNative,
 			})
 		}
 	}
-	return bidderResponse, nil
+	return bidderResponse, errs
+}
+
+// prepareBid checks one Kontext bid and makes it ready for the client:
+//
+//   - the bid must answer a native impression we sent and declare mtype 4
+//   - ${AUCTION_PRICE} is expanded in nurl, burl and lurl. Nothing else in PBS
+//     or Prebid.js expands it, and Kontext records an unexpanded price as
+//     zero. Our auction is first price, so the clearing price is bid.price.
+//     The value is a plain decimal, put in place; the rest of each signed URL
+//     is untouched. ${AUCTION_LOSS} is left for whoever knows the loss reason.
+//   - the native markup is normalised to a top-level Native 1.2 object (the
+//     client's parser rejects the 1.1 {"native":{...}} wrapper) and gains
+//     ext.kontext with nurl, lurl and the Kontext seat. Prebid.js fires burl
+//     on render but nothing fires nurl or lurl for a native bid, so the
+//     bundle reads them from there.
+func prepareBid(bid *openrtb2.Bid, seat string, offered map[string]struct{}) error {
+	if _, ok := offered[bid.ImpID]; !ok {
+		return &errortypes.BadServerResponse{Message: fmt.Sprintf("kontext: bid %s answers unknown imp %q", bid.ID, bid.ImpID)}
+	}
+	if bid.MType != openrtb2.MarkupNative {
+		return &errortypes.BadServerResponse{Message: fmt.Sprintf("kontext: bid %s has mtype %d, only native (4) was offered", bid.ID, bid.MType)}
+	}
+
+	price := strconv.FormatFloat(bid.Price, 'f', -1, 64)
+	bid.NURL = strings.ReplaceAll(bid.NURL, priceMacro, price)
+	bid.BURL = strings.ReplaceAll(bid.BURL, priceMacro, price)
+	bid.LURL = strings.ReplaceAll(bid.LURL, priceMacro, price)
+
+	adm, err := nativeAdm(bid.AdM, kontextExt{NURL: bid.NURL, LURL: bid.LURL, Seat: seat})
+	if err != nil {
+		return &errortypes.BadServerResponse{Message: fmt.Sprintf("kontext: bid %s: %s", bid.ID, err)}
+	}
+	bid.AdM = adm
+	return nil
+}
+
+const priceMacro = "${AUCTION_PRICE}"
+
+// kontextExt is what the native markup carries for the client under
+// ext.kontext.
+type kontextExt struct {
+	LURL string `json:"lurl,omitempty"`
+	NURL string `json:"nurl,omitempty"`
+	Seat string `json:"seat,omitempty"`
+}
+
+// nativeAdm unwraps a Native 1.1 {"native":{...}} response and adds
+// ext.kontext. Every other field is kept byte for byte.
+func nativeAdm(adm string, ext kontextExt) (string, error) {
+	var native map[string]jsonutil.RawMessage
+	if err := jsonutil.Unmarshal([]byte(adm), &native); err != nil {
+		return "", fmt.Errorf("native markup is not a JSON object: %s", err)
+	}
+	if _, hasAssets := native["assets"]; !hasAssets {
+		if wrapped, ok := native["native"]; ok {
+			native = nil
+			if err := jsonutil.Unmarshal(wrapped, &native); err != nil {
+				return "", fmt.Errorf("native markup wrapper is not a JSON object: %s", err)
+			}
+		}
+	}
+	if _, hasAssets := native["assets"]; !hasAssets {
+		return "", fmt.Errorf("native markup has no assets")
+	}
+
+	admExt := map[string]jsonutil.RawMessage{}
+	if raw, ok := native["ext"]; ok {
+		if err := jsonutil.Unmarshal(raw, &admExt); err != nil {
+			return "", fmt.Errorf("native markup ext is not a JSON object: %s", err)
+		}
+	}
+	rawExt, err := marshalPlain(ext)
+	if err != nil {
+		return "", err
+	}
+	admExt["kontext"] = rawExt
+	if native["ext"], err = marshalPlain(admExt); err != nil {
+		return "", err
+	}
+
+	out, err := marshalPlain(native)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// marshalPlain encodes without HTML escaping, so "&" in a signed URL stays
+// "&" instead of becoming "\u0026" inside the markup string.
+func marshalPlain(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }

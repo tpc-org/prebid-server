@@ -1,0 +1,141 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "tmax": 1400,
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "sellerId": "1",
+            "placementId": "sayhola-b8ed507b"
+          }
+        }
+      }
+    ],
+    "site": {
+      "domain": "sayhola.ai",
+      "page": "https://sayhola.ai/chat",
+      "publisher": {
+        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+      }
+    },
+    "device": {
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+      "ip": "203.0.113.9"
+    }
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "https://rtb.kontext.ai/openrtb2/bid/hola-test",
+        "body": {
+          "id": "req-1",
+          "tmax": 1400,
+          "imp": [
+            {
+              "id": "imp-1",
+              "native": {
+                "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+                "ver": "1.2"
+              },
+              "tagid": "sayhola-b8ed507b"
+            }
+          ],
+          "site": {
+            "domain": "sayhola.ai",
+            "page": "https://sayhola.ai/chat",
+            "publisher": {
+              "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+            }
+          },
+          "device": {
+            "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+            "ip": "203.0.113.9"
+          },
+          "at": 1,
+          "cur": [
+            "USD"
+          ],
+          "source": {
+            "schain": {
+              "ver": "1.0",
+              "complete": 1,
+              "nodes": [
+                {
+                  "asi": "sayhola.ai",
+                  "sid": "1",
+                  "hp": 1
+                }
+              ]
+            }
+          }
+        },
+        "impIDs": [
+          "imp-1"
+        ],
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "X-Openrtb-Version": [
+            "2.6"
+          ],
+          "Authorization": [
+            "Bearer test-token"
+          ]
+        }
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "id": "req-1",
+          "cur": "USD",
+          "seatbid": [
+            {
+              "seat": "1099",
+              "bid": [
+                {
+                  "id": "bid-nomtype",
+                  "impid": "imp-1",
+                  "price": 3.5,
+                  "nurl": "https://rtb.kontext.ai/n/win?sig=abc123&imp=778&p=${AUCTION_PRICE}",
+                  "burl": "https://rtb.kontext.ai/n/bill?sig=def456&imp=778&p=${AUCTION_PRICE}",
+                  "lurl": "https://rtb.kontext.ai/n/loss?sig=ghi789&imp=778&p=${AUCTION_PRICE}&l=${AUCTION_LOSS}",
+                  "adm": "{\"assets\":[{\"id\":0,\"title\":{\"text\":\"Product title\"}},{\"id\":1,\"img\":{\"h\":628,\"type\":3,\"url\":\"https://cdn.adserver.example/creative/778.jpg\",\"w\":1200}},{\"data\":{\"type\":12,\"value\":\"Learn more\"},\"id\":4}],\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://imp.adserver.example/i?id=778\"},{\"event\":1,\"method\":1,\"url\":\"https://rtb.kontext.ai/n/imp?sig=jkl012\"}],\"link\":{\"url\":\"https://click.adserver.example/c?id=778\"},\"ver\":\"1.2\"}",
+                  "adomain": [
+                    "brand.example.com",
+                    "brand-shop.example.com"
+                  ],
+                  "crid": "778",
+                  "cat": [
+                    "IAB19"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": []
+    }
+  ],
+  "expectedMakeBidsErrors": [
+    {
+      "value": "kontext: bid bid-nomtype has mtype 0, only native (4) was offered",
+      "comparison": "literal"
+    }
+  ]
+}
