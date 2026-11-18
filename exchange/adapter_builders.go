@@ -144,6 +144,7 @@ import (
 	"github.com/prebid/prebid-server/v4/adapters/kidoz"
 	"github.com/prebid/prebid-server/v4/adapters/kiviads"
 	"github.com/prebid/prebid-server/v4/adapters/kobler"
+	"github.com/prebid/prebid-server/v4/adapters/kontext"
 	"github.com/prebid/prebid-server/v4/adapters/krushmedia"
 	"github.com/prebid/prebid-server/v4/adapters/kueezrtb"
 	"github.com/prebid/prebid-server/v4/adapters/lemmadigital"
@@ -439,6 +440,7 @@ func newAdapterBuilders() map[openrtb_ext.BidderName]adapters.Builder {
 		openrtb_ext.BidderKiviads:           kiviads.Builder,
 		openrtb_ext.BidderLmKiviads:         lmkiviads.Builder,
 		openrtb_ext.BidderKobler:            kobler.Builder,
+		openrtb_ext.BidderKontext:           kontext.Builder,
 		openrtb_ext.BidderKrushmedia:        krushmedia.Builder,
 		openrtb_ext.BidderKueezRTB:          kueezrtb.Builder,
 		openrtb_ext.BidderLemmadigital:      lemmadigital.Builder,

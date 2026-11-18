@@ -1,0 +1,108 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "tmax": 1400,
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "sellerid": "1",
+            "placementid": "sayhola-b8ed507b"
+          }
+        }
+      }
+    ],
+    "site": {
+      "domain": "sayhola.ai",
+      "page": "https://sayhola.ai/chat",
+      "publisher": {
+        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+      }
+    },
+    "device": {
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+      "ip": "203.0.113.9"
+    }
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "http://any.url/hola-test",
+        "body": {
+          "id": "req-1",
+          "tmax": 1400,
+          "imp": [
+            {
+              "id": "imp-1",
+              "native": {
+                "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+                "ver": "1.2"
+              },
+              "tagid": "sayhola-b8ed507b"
+            }
+          ],
+          "site": {
+            "domain": "sayhola.ai",
+            "page": "https://sayhola.ai/chat",
+            "publisher": {
+              "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+            }
+          },
+          "device": {
+            "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+            "ip": "203.0.113.9"
+          },
+          "at": 1,
+          "cur": [
+            "USD"
+          ],
+          "source": {
+            "schain": {
+              "ver": "1.0",
+              "complete": 1,
+              "nodes": [
+                {
+                  "asi": "sayhola.ai",
+                  "sid": "1",
+                  "hp": 1
+                }
+              ]
+            }
+          }
+        },
+        "impIDs": [
+          "imp-1"
+        ],
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "X-Openrtb-Version": [
+            "2.6"
+          ],
+          "Authorization": [
+            "Bearer test-token"
+          ]
+        }
+      },
+      "mockResponse": {
+        "status": 503
+      }
+    }
+  ],
+  "expectedBidResponses": [],
+  "expectedMakeBidsErrors": [
+    {
+      "value": "kontext: unexpected status code 503",
+      "comparison": "literal"
+    }
+  ]
+}

@@ -33,6 +33,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/oschwald/maxminddb-golang"
 	"github.com/prebid/openrtb/v20/openrtb2"
+	"github.com/prebid/prebid-server/v4/hooks/hookstage"
+	"golang.org/x/text/language"
 )
 
 const geoReloadInterval = 10 * time.Minute
@@ -143,4 +145,68 @@ func resolveCountry(lookup countryLookup, device *openrtb2.Device) string {
 		return strings.ToUpper(device.Geo.Country)
 	}
 	return ""
+}
+
+// ── Country on the bid request (HOL-144) ───────────────────────────────────
+//
+// The same lookup also fills device.geo.country on the request bidders
+// receive, when the caller sent none. Callers rarely send it, and a bidder
+// that buys by country (Kontext) reaches only part of its demand without it.
+// Only the country is added, never a region, city or coordinate.
+//
+// The value is ISO-3166-1 alpha-3, as OpenRTB specifies. This is separate
+// from the alpha-2 code written to activity.log, which does not change.
+
+// bidderCountry returns the alpha-3 country to put on the bid request, or ""
+// to leave the request alone: no device, a country the caller already sent
+// (never overwritten), or an IP the database does not resolve.
+func bidderCountry(lookup countryLookup, device *openrtb2.Device) string {
+	if lookup == nil || device == nil {
+		return ""
+	}
+	if device.Geo != nil && device.Geo.Country != "" {
+		return ""
+	}
+	for _, raw := range []string{device.IP, device.IPv6} {
+		if raw == "" {
+			continue
+		}
+		if c := lookup.Country(net.ParseIP(raw)); c != "" {
+			return alpha3Country(c)
+		}
+	}
+	return ""
+}
+
+// alpha3Country converts an alpha-2 code to alpha-3, or "" when it is not a
+// real country (MaxMind also returns codes such as "EU" and "AP").
+func alpha3Country(code string) string {
+	region, err := language.ParseRegion(code)
+	if err != nil || !region.IsCountry() {
+		return ""
+	}
+	return region.ISO3()
+}
+
+// setDeviceCountry is the ChangeSet mutation that writes the country. It
+// copies device and geo instead of writing through the shared pointers, and
+// re-checks that no country appeared in the meantime.
+func setDeviceCountry(country string) hookstage.MutationFunc[hookstage.ProcessedAuctionRequestPayload] {
+	return func(p hookstage.ProcessedAuctionRequestPayload) (hookstage.ProcessedAuctionRequestPayload, error) {
+		if p.Request == nil || p.Request.BidRequest == nil || p.Request.Device == nil {
+			return p, nil
+		}
+		device := *p.Request.Device
+		var geo openrtb2.Geo
+		if device.Geo != nil {
+			geo = *device.Geo
+		}
+		if geo.Country != "" {
+			return p, nil
+		}
+		geo.Country = country
+		device.Geo = &geo
+		p.Request.Device = &device
+		return p, nil
+	}
 }
