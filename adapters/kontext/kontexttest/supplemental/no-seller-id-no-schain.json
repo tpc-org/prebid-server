@@ -29,7 +29,7 @@
   "httpCalls": [
     {
       "expectedRequest": {
-        "uri": "https://rtb.kontext.ai/openrtb2/bid/hola-test",
+        "uri": "http://any.url/hola-test",
         "body": {
           "id": "req-1",
           "tmax": 1400,

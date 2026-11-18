@@ -16,9 +16,9 @@ func TestValidParams(t *testing.T) {
 	}
 	for _, p := range []string{
 		`{}`,
-		`{"sellerId":"1"}`,
-		`{"placementId":"sayhola-b8ed507b"}`,
-		`{"sellerId":"1","placementId":"sayhola-b8ed507b"}`,
+		`{"sellerid":"1"}`,
+		`{"placementid":"sayhola-b8ed507b"}`,
+		`{"sellerid":"1","placementid":"sayhola-b8ed507b"}`,
 	} {
 		if err := validator.Validate(openrtb_ext.BidderKontext, json.RawMessage(p)); err != nil {
 			t.Errorf("Schema rejected kontext params: %s\n%v", p, err)
@@ -34,8 +34,8 @@ func TestInvalidParams(t *testing.T) {
 	for _, p := range []string{
 		`null`,
 		`"1"`,
-		`{"sellerId":1}`,
-		`{"placementId":["sayhola-b8ed507b"]}`,
+		`{"sellerid":1}`,
+		`{"placementid":["sayhola-b8ed507b"]}`,
 	} {
 		if err := validator.Validate(openrtb_ext.BidderKontext, json.RawMessage(p)); err == nil {
 			t.Errorf("Schema allowed unexpected params: %s", p)

@@ -11,8 +11,8 @@
         },
         "ext": {
           "bidder": {
-            "sellerId": "1",
-            "placementId": "sayhola-b8ed507b"
+            "sellerid": "1",
+            "placementid": "sayhola-b8ed507b"
           }
         }
       }

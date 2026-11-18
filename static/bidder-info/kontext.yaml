@@ -1,12 +1,16 @@
 # Kontext (HOL-144): a standard OpenRTB bidder, POST <endpoint>/<partner-id>
 # with a bearer token. The partner id and token come from pbs.yaml
-# adapters.kontext.extra_info: {"partnerId":"...","token":"..."}. Without
-# them the adapter still builds and simply sends nothing, so this file can be
-# released before the credentials exist. See adapters/kontext/kontext.go.
+# adapters.kontext.extra_info: {"partnerId":"...","token":"..."}.
+#
+# Disabled here because both values are host-specific. pbs.yaml enables the
+# bidder with "disabled: false" and must add extra_info in the same release:
+# Builder fails without it and PBS will not start. See
+# adapters/kontext/kontext.go.
 #
 # Native on web only: the formats and environment agreed with Kontext. Kontext
 # answers anything else with a no-bid.
 endpoint: "https://rtb.kontext.ai/openrtb2/bid"
+disabled: true
 endpointCompression: gzip
 maintainer:
   email: "prebid@tpcsrv.com"

@@ -10,10 +10,11 @@
 //	    extra_info: '{"partnerId":"...","token":"..."}'
 //
 // The bid URL is <endpoint>/<partnerId>, authenticated with
-// "Authorization: Bearer <token>". Builder never fails on missing or
-// unreadable extra_info: an unconfigured adapter sends nothing and reports a
-// per-bidder error instead. A Builder error would stop PBS at boot, and the
-// image is released before Kontext issues the credentials.
+// "Authorization: Bearer <token>". Both values are host-specific, so the
+// bidder is disabled in static/bidder-info/kontext.yaml and Builder is not
+// called until pbs.yaml sets "disabled: false". Builder then fails, and PBS
+// refuses to start, if extra_info is missing or incomplete: enable the bidder
+// and add extra_info in the same settings release.
 //
 // What the request side does beyond passing the OpenRTB request through:
 //   - sends only native impressions on web (site) requests, the format and
@@ -21,7 +22,7 @@
 //   - never sends a child-directed request (regs.coppa = 1)
 //   - declares a first-price auction in USD
 //   - adds a complete supply chain ending in our node when the caller sent none
-//   - sets imp.tagid from the Stored Imp's placementId
+//   - sets imp.tagid from the Stored Imp's placementid
 //
 // User identifiers (user.id, user.eids with hashed emails) and privacy
 // signals are passed through exactly as PBS hands them over.
@@ -32,6 +33,7 @@ package kontext
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -60,14 +62,21 @@ type adapter struct {
 	info     extraInfo
 }
 
-// Builder never returns an error; see the package doc.
+// Builder builds the Kontext adapter. It is only called when the bidder is
+// enabled, and fails without an endpoint, a partner id and a token.
 func Builder(_ openrtb_ext.BidderName, cfg config.Adapter, _ config.Server) (adapters.Bidder, error) {
 	a := &adapter{endpoint: strings.TrimRight(cfg.Endpoint, "/")}
-	if cfg.ExtraAdapterInfo != "" {
-		// Unreadable extra_info leaves the adapter unconfigured.
-		if err := jsonutil.Unmarshal([]byte(cfg.ExtraAdapterInfo), &a.info); err != nil {
-			a.info = extraInfo{}
-		}
+	if a.endpoint == "" {
+		return nil, errors.New("kontext: endpoint is not configured")
+	}
+	if cfg.ExtraAdapterInfo == "" {
+		return nil, errors.New("kontext: extra_info with partnerId and token is required")
+	}
+	if err := jsonutil.Unmarshal([]byte(cfg.ExtraAdapterInfo), &a.info); err != nil {
+		return nil, fmt.Errorf("kontext: invalid extra_info: %w", err)
+	}
+	if a.info.PartnerID == "" || a.info.Token == "" {
+		return nil, errors.New("kontext: extra_info must set partnerId and token")
 	}
 	if a.info.ASI == "" {
 		a.info.ASI = defaultASI
@@ -75,14 +84,7 @@ func Builder(_ openrtb_ext.BidderName, cfg config.Adapter, _ config.Server) (ada
 	return a, nil
 }
 
-func (a *adapter) configured() bool {
-	return a.endpoint != "" && a.info.PartnerID != "" && a.info.Token != ""
-}
-
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	if !a.configured() {
-		return nil, []error{&errortypes.BadInput{Message: "kontext: partnerId and token are not configured"}}
-	}
 	if request.Site == nil || request.App != nil {
 		return nil, []error{&errortypes.BadInput{Message: "kontext: only web (site) requests are sent"}}
 	}
@@ -136,8 +138,8 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 
 // buildImp returns the impression as Kontext should receive it: native only,
 // floor in USD, tagid set, and no PBS-internal ext.
-func buildImp(imp openrtb2.Imp, requestInfo *adapters.ExtraRequestInfo) (openrtb2.Imp, openrtb_ext.ExtImpKontext, error) {
-	var params openrtb_ext.ExtImpKontext
+func buildImp(imp openrtb2.Imp, requestInfo *adapters.ExtraRequestInfo) (openrtb2.Imp, openrtb_ext.ImpExtKontext, error) {
+	var params openrtb_ext.ImpExtKontext
 	if imp.Native == nil {
 		return imp, params, &errortypes.BadInput{Message: fmt.Sprintf("kontext: imp %s has no native object", imp.ID)}
 	}
@@ -249,10 +251,11 @@ func (a *adapter) MakeBids(request *openrtb2.BidRequest, _ *adapters.RequestData
 				errs = append(errs, err)
 				continue
 			}
-			bidderResponse.Bids = append(bidderResponse.Bids, &adapters.TypedBid{
-				Bid:     bid,
-				BidType: openrtb_ext.BidTypeNative,
-			})
+			typed := &adapters.TypedBid{Bid: bid, BidType: openrtb_ext.BidTypeNative}
+			if len(bid.ADomain) > 0 {
+				typed.BidMeta = &openrtb_ext.ExtBidPrebidMeta{AdvertiserDomains: bid.ADomain}
+			}
+			bidderResponse.Bids = append(bidderResponse.Bids, typed)
 		}
 	}
 	return bidderResponse, errs

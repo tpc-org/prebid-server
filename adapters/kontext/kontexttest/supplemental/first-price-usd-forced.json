@@ -11,8 +11,8 @@
         },
         "ext": {
           "bidder": {
-            "sellerId": "1",
-            "placementId": "sayhola-b8ed507b"
+            "sellerid": "1",
+            "placementid": "sayhola-b8ed507b"
           }
         }
       }
@@ -37,7 +37,7 @@
   "httpCalls": [
     {
       "expectedRequest": {
-        "uri": "https://rtb.kontext.ai/openrtb2/bid/hola-test",
+        "uri": "http://any.url/hola-test",
         "body": {
           "id": "req-1",
           "tmax": 1400,

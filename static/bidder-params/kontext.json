@@ -4,11 +4,11 @@
   "description": "A schema which validates params accepted by the Kontext adapter. Nothing is required: a missing value must never reject the whole imp.",
   "type": "object",
   "properties": {
-    "sellerId": {
+    "sellerid": {
       "type": "string",
       "description": "The publisher's seller_id in sayhola.ai/sellers.json (its dashboard publisher id). Used as the sid of our supply-chain node."
     },
-    "placementId": {
+    "placementid": {
       "type": "string",
       "description": "Our placement id, normally the Stored Imp id. Sent as imp.tagid."
     }
