@@ -5,11 +5,15 @@ upstream prebid/prebid-server. **Do not include this file in any upstream PR.**
 
 ## What this fork contains beyond upstream
 
-Three files:
+Fork-only files and directories:
 
 - `FORK_NOTES.md` — this file
 - `.gitattributes` — marks fork-only files as `export-ignore`
 - `scripts/check-upstream-pr-scope.sh` — pre-flight check for upstream PR branches
+- `scripts/check-release-source.sh` and `scripts/test-release-source.sh` — release source checks
+- `adapters/tpc/` — TPC stub bidder (see "Custom adapters")
+- `modules/tpc/activitylog/`, `modules/tpc/paramfanout/`, `modules/tpc/profanityfilter/` — TPC hook modules (see "Custom hook modules")
+- the fork edit to `config/structlog.go` (see "Upstream files with fork edits")
 
 TPC-specific adapters live under `adapters/tpc*`, and TPC-specific hook
 modules live under `modules/tpc/*`, per the conventions below.
@@ -228,16 +232,18 @@ not in client subdirectories.
 ### `cache.vastxml` gotcha — banner placements
 
 PBS supports server-side bid caching via Prebid Cache (a separate
-service). The pbs.yaml in this deployment does NOT configure a cache
-endpoint — we're caching client-side via Prebid.js.
+service). Since 2026-07-28, the pbs.yaml in this deployment configures a cache
+endpoint (`cache:` `127.0.0.1:2424`, `external_cache:`
+`https://pbs.tpcsrv.com/cache`) for the Mobile SDK and video.
 
 **Do not include `ext.prebid.cache.vastxml` in a Stored Request used
 for banner placements.** With no cache endpoint configured, PBS will
 silently strip the banner `adm` (markup) from the response. Bid
 metadata returns (cpm, size, creativeId) but the ad won't render.
 
-This was discovered during sayhola Path C migration. If you ever add
-a cache endpoint configuration to pbs.yaml, revisit this restriction.
+This was discovered during sayhola Path C migration. A cache endpoint has
+since been added to pbs.yaml (2026-07-28) and banner was retired
+(2026-10-21), so revisit whether this restriction still applies.
 
 ## Build and test
 
@@ -287,11 +293,12 @@ To add a new TPC-specific PBS adapter:
        disabled: false
 ```
 
-4. Push pbs-settings to production to deploy the config change.
-5. Push this repo to production to build the new adapter into the binary.
-
-(Order: pbs-settings first to avoid a brief window where the binary
-knows about an adapter the config hasn't enabled yet.)
+4. Release the config change through the pbs-settings settings release,
+   one region at a time with separate approval (see pbs-settings
+   `scripts/README.md`).
+5. Release the new binary through the image release outline in
+   "Deploy mechanism" above (`deploy.py prepare` / `activate`). Do not
+   `git push production` from this repo.
 
 ## Key learnings preserved
 
