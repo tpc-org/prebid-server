@@ -153,11 +153,22 @@ jobs:
         run: |
           docker save "prebid-server:tpc-${REV:0:8}" | gzip -n > image.tar.gz
           python3 - <<'PY'
-          import hashlib, json, os
+          import hashlib, json, os, re, tarfile
           sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
+          # image_id is what `docker load` reports on the PBS hosts (Docker 25, classic image store):
+          # the image config digest, named in the saved archive's own manifest.json. This runner's
+          # Docker uses the containerd store, where `docker inspect .Id` is the OCI manifest digest
+          # instead, so deploy.py's `docker image inspect <image_id>` after `docker load` would fail.
+          # The runner's value is kept as runner_image_id.
+          with tarfile.open('image.tar.gz', 'r:gz') as t:
+              saved = json.load(t.extractfile('manifest.json'))
+          assert len(saved) == 1 and saved[0]['RepoTags'] == [f"prebid-server:tpc-{os.environ['REV'][:8]}"], saved
+          config = re.fullmatch(r'(?:blobs/sha256/)?([0-9a-f]{64})(?:\.json)?', saved[0]['Config'])
+          assert config, saved[0]['Config']
           m = {
               'source_revision': os.environ['REV'], 'source_branch': 'master', 'version': os.environ['VERSION'],
-              'image_id': os.environ['IMAGE_ID'], 'image_tag': f"prebid-server:tpc-{os.environ['REV'][:8]}",
+              'image_id': 'sha256:' + config.group(1), 'runner_image_id': os.environ['IMAGE_ID'],
+              'image_tag': f"prebid-server:tpc-{os.environ['REV'][:8]}",
               'binary_sha256': os.environ['BINARY_SHA'], 'vcs_modified': False, 'architecture': 'linux/amd64',
               'status_http': int(os.environ['STATUS_HTTP']), 'version_http': int(os.environ['VERSION_HTTP']),
               'external_network': 'none (internal Docker network; adapters needing private keys disabled)',
