@@ -24,8 +24,11 @@
 //     requests earn nothing until Kontext enables app for us (HOL-164).
 //   - never sends a child-directed request (regs.coppa = 1)
 //   - declares a first-price auction in USD
-//   - adds a complete supply chain ending in our node when the caller sent none
-//   - sets imp.tagid from the Stored Imp's placementid
+//   - ends the supply chain in our node: appended to the chain a caller
+//     sent (a reseller such as Velocity), or a complete one-node chain when
+//     there is none (our own publishers)
+//   - sets imp.tagid from the placementid param, over any tagid the caller
+//     sent, so Kontext reports by our placement id (HOL-164)
 //
 // User identifiers (user.id, user.eids with hashed emails) and privacy
 // signals are passed through exactly as PBS hands them over.
@@ -175,7 +178,11 @@ func buildImp(imp openrtb2.Imp, requestInfo *adapters.ExtraRequestInfo) (openrtb
 	}
 
 	imp.Banner, imp.Video, imp.Audio = nil, nil, nil
-	if imp.TagID == "" {
+	// Our placement id names the site and the path it reached us by, which is
+	// what Kontext's revenue has to be traced back to. A reseller's own tagid
+	// means nothing to us, so ours wins; a caller's tagid is kept only when
+	// the placement id is not configured.
+	if params.PlacementID != "" {
 		imp.TagID = params.PlacementID
 	}
 
@@ -192,25 +199,47 @@ func buildImp(imp openrtb2.Imp, requestInfo *adapters.ExtraRequestInfo) (openrtb
 	return imp, params, nil
 }
 
-// sourceWithSupplyChain keeps a supply chain the caller already sent. When
-// there is none and the Stored Imp names the publisher's seller id, it adds a
-// complete chain whose only node is ours. Without a seller id nothing is
-// added: a made-up node would be worse than the incomplete chain Kontext
-// assumes.
+// sourceWithSupplyChain ends the supply chain in our node, so Kontext can
+// match it against our listing in megabrain.co's sellers.json and our
+// sellers.json. Without a seller id the request is left as it came: a made-up
+// node would be worse than the incomplete chain Kontext then assumes.
+//
+//   - No chain from the caller (our own publishers): a complete chain whose
+//     only node is ours.
+//   - A chain from the caller (a reseller such as Velocity): our node is
+//     appended, and the caller's "complete" flag is kept, since we add the
+//     last hop and nothing else.
+//   - A chain that already ends in our node is left alone.
+//
+// The caller's source and nodes are never modified in place: PBS shares the
+// request between bidders.
 func sourceWithSupplyChain(source *openrtb2.Source, asi, sellerID string) *openrtb2.Source {
-	if sellerID == "" || (source != nil && source.SChain != nil) {
+	if sellerID == "" {
 		return source
 	}
+	hp := int8(1)
+	ours := openrtb2.SupplyChainNode{ASI: asi, SID: sellerID, HP: &hp}
+
 	var out openrtb2.Source
 	if source != nil {
 		out = *source
 	}
-	hp := int8(1)
-	out.SChain = &openrtb2.SupplyChain{
-		Ver:      "1.0",
-		Complete: 1,
-		Nodes:    []openrtb2.SupplyChainNode{{ASI: asi, SID: sellerID, HP: &hp}},
+	if out.SChain == nil {
+		out.SChain = &openrtb2.SupplyChain{Ver: "1.0", Complete: 1, Nodes: []openrtb2.SupplyChainNode{ours}}
+		return &out
 	}
+	if n := len(out.SChain.Nodes); n > 0 {
+		last := out.SChain.Nodes[n-1]
+		if strings.EqualFold(last.ASI, asi) && last.SID == sellerID {
+			return source
+		}
+	}
+	chain := *out.SChain
+	chain.Nodes = append(append(make([]openrtb2.SupplyChainNode, 0, len(chain.Nodes)+1), chain.Nodes...), ours)
+	if chain.Ver == "" {
+		chain.Ver = "1.0"
+	}
+	out.SChain = &chain
 	return &out
 }
 

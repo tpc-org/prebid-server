@@ -75,3 +75,21 @@ func TestMakeBidsSetsAdvertiserDomains(t *testing.T) {
 	require.NotNil(t, response.Bids[0].BidMeta)
 	assert.Equal(t, []string{"brand.example.com"}, response.Bids[0].BidMeta.AdvertiserDomains)
 }
+
+// PBS shares the request between bidders, so appending our node must never
+// touch the caller's source or its node slice.
+func TestSupplyChainLeavesCallerSourceUnchanged(t *testing.T) {
+	hp := int8(1)
+	nodes := make([]openrtb2.SupplyChainNode, 1, 4) // spare capacity: a plain append would write into it
+	nodes[0] = openrtb2.SupplyChainNode{ASI: "velocity.io", SID: "615cbf2d3872", HP: &hp}
+	caller := &openrtb2.Source{TID: "t-1", SChain: &openrtb2.SupplyChain{Ver: "1.0", Complete: 1, Nodes: nodes}}
+
+	out := sourceWithSupplyChain(caller, defaultASI, "52")
+
+	require.Len(t, out.SChain.Nodes, 2)
+	assert.Equal(t, "sayhola.ai", out.SChain.Nodes[1].ASI)
+	assert.Equal(t, "52", out.SChain.Nodes[1].SID)
+	assert.Equal(t, int8(1), out.SChain.Complete)
+	assert.Len(t, caller.SChain.Nodes, 1)
+	assert.Equal(t, openrtb2.SupplyChainNode{}, nodes[:2][1], "caller's backing array was written")
+}
