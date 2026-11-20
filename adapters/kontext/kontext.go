@@ -17,8 +17,11 @@
 // and add extra_info in the same settings release.
 //
 // What the request side does beyond passing the OpenRTB request through:
-//   - sends only native impressions on web (site) requests, the format and
-//     environment agreed with Kontext; anything else is a no-bid on their side
+//   - sends only native impressions, the format agreed with Kontext, on web
+//     (site) or in-app (app) requests. Exactly one of site and app must be
+//     present: Kontext treats both or neither as a no-bid. Kontext also
+//     no-bids an environment it has not agreed for our partner id, so app
+//     requests earn nothing until Kontext enables app for us (HOL-164).
 //   - never sends a child-directed request (regs.coppa = 1)
 //   - declares a first-price auction in USD
 //   - adds a complete supply chain ending in our node when the caller sent none
@@ -85,8 +88,8 @@ func Builder(_ openrtb_ext.BidderName, cfg config.Adapter, _ config.Server) (ada
 }
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	if request.Site == nil || request.App != nil {
-		return nil, []error{&errortypes.BadInput{Message: "kontext: only web (site) requests are sent"}}
+	if (request.Site == nil) == (request.App == nil) {
+		return nil, []error{&errortypes.BadInput{Message: "kontext: a request needs exactly one of site or app"}}
 	}
 	if request.Regs != nil && request.Regs.COPPA == 1 {
 		return nil, []error{&errortypes.BadInput{Message: "kontext: child-directed requests are not sent"}}
