@@ -52,7 +52,7 @@
               },
               "bidfloor": 0.5,
               "bidfloorcur": "USD",
-              "tagid": "caller-tag",
+              "tagid": "sayhola-b8ed507b",
               "ext": {
                 "gpid": "/chat/inline-1"
               }

@@ -11,17 +11,19 @@
         },
         "ext": {
           "bidder": {
-            "sellerid": "1",
-            "placementid": "sayhola-b8ed507b"
+            "sellerid": "52",
+            "placementid": "dsp-velocity-smry-native"
           }
-        }
+        },
+        "tagid": "au-demo-native"
       }
     ],
     "site": {
-      "domain": "sayhola.ai",
-      "page": "https://sayhola.ai/chat",
+      "id": "site-key-demo",
+      "domain": "smry.ai",
+      "page": "https://smry.ai/",
       "publisher": {
-        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+        "id": "local"
       }
     },
     "device": {
@@ -35,8 +37,9 @@
         "complete": 1,
         "nodes": [
           {
-            "asi": "inline.example",
-            "sid": "pub-9",
+            "asi": "velocity.io",
+            "sid": "615cbf2d3872",
+            "rid": "req-nat-demo",
             "hp": 1
           }
         ]
@@ -57,14 +60,15 @@
                 "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
                 "ver": "1.2"
               },
-              "tagid": "sayhola-b8ed507b"
+              "tagid": "dsp-velocity-smry-native"
             }
           ],
           "site": {
-            "domain": "sayhola.ai",
-            "page": "https://sayhola.ai/chat",
+            "id": "site-key-demo",
+            "domain": "smry.ai",
+            "page": "https://smry.ai/",
             "publisher": {
-              "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+              "id": "local"
             }
           },
           "device": {
@@ -78,8 +82,14 @@
               "complete": 1,
               "nodes": [
                 {
-                  "asi": "inline.example",
-                  "sid": "pub-9",
+                  "asi": "velocity.io",
+                  "sid": "615cbf2d3872",
+                  "rid": "req-nat-demo",
+                  "hp": 1
+                },
+                {
+                  "asi": "sayhola.ai",
+                  "sid": "52",
                   "hp": 1
                 }
               ]
