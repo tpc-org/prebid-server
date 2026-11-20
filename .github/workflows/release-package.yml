@@ -63,6 +63,9 @@ jobs:
           git merge-base --is-ancestor "$REV" origin/master || { echo "$REV is not on master" >&2; exit 1; }
           test "$(git rev-parse HEAD)" = "$REV"
           sh scripts/check-release-source.sh "$REV"
+          # Our fork lacks upstream's newer release tags; without them describe falls back to an old one
+          # (v4.1.0-… instead of v4.11.1-…). Tags only: no commits or files change in the clean clone.
+          git fetch -q --tags https://github.com/prebid/prebid-server.git 'refs/tags/v*:refs/tags/v*' || true
           echo "version=$(git describe --tags --always --abbrev=9)" >> "$GITHUB_OUTPUT"
 
       - name: Source archive (the clean clone, including .git)
