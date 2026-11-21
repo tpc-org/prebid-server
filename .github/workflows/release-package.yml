@@ -1,0 +1,194 @@
+name: Release package (pinned PBS image)
+
+# TPC fork-only (brain Phase 6, C4 part 1). Builds the production release package from an
+# approved master revision, exactly as docs/integration/pinned-image-release.md and
+# FORK_NOTES.md "Deploy mechanism" describe, so nobody packages it by hand:
+#   fresh full clone at the revision -> on origin/master -> scripts/check-release-source.sh
+#   -> buildx linux/amd64 (TEST=false, REVISION, VERSION) -> go version -m (vcs.revision,
+#   vcs.modified=false) -> isolated smoke (/status, /version on an internal network)
+#   -> image.tar.gz + source.tar.gz + manifest.json (checksums) as the run's artifact.
+# It never touches production. Getting the package onto the hosts and self-test/prepare/
+# activate stay with the release wrapper (part 2, separate review).
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Approved full 40-char master commit'
+        required: true
+  pull_request:
+    paths:
+      - '.github/workflows/release-package.yml'
+      - 'Dockerfile'
+      - 'scripts/check-release-source.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Resolve the revision
+        id: rev
+        env:
+          INPUT: ${{ inputs.revision }}
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then REV="$INPUT"
+          else REV=$(git ls-remote "https://github.com/${{ github.repository }}" refs/heads/master | cut -f1); fi
+          echo "$REV" | grep -Eq '^[0-9a-f]{40}$' || { echo "not a full revision: $REV" >&2; exit 1; }
+          echo "rev=$REV" >> "$GITHUB_OUTPUT"
+          echo "short=${REV:0:8}" >> "$GITHUB_OUTPUT"
+          echo "Packaging $REV (${{ github.event_name }})"
+
+      - name: Fresh full clone at the revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.rev.outputs.rev }}
+          fetch-depth: 0
+          path: src
+          persist-credentials: false
+
+      - name: Approved, clean source
+        id: src
+        working-directory: src
+        env:
+          REV: ${{ steps.rev.outputs.rev }}
+        run: |
+          git fetch -q origin master
+          git merge-base --is-ancestor "$REV" origin/master || { echo "$REV is not on master" >&2; exit 1; }
+          test "$(git rev-parse HEAD)" = "$REV"
+          sh scripts/check-release-source.sh "$REV"
+          # Our fork lacks upstream's newer release tags; without them describe falls back to an old one
+          # (v4.1.0-… instead of v4.11.1-…). Tags only: no commits or files change in the clean clone.
+          git fetch -q --tags https://github.com/prebid/prebid-server.git 'refs/tags/v*:refs/tags/v*' || true
+          echo "version=$(git describe --tags --always --abbrev=9)" >> "$GITHUB_OUTPUT"
+
+      - name: Source archive (the clean clone, including .git)
+        run: tar -czf source.tar.gz -C src .
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build linux/amd64
+        env:
+          REV: ${{ steps.rev.outputs.rev }}
+          VERSION: ${{ steps.src.outputs.version }}
+        run: |
+          docker buildx build --platform linux/amd64 --load \
+            --build-arg TEST=false --build-arg REVISION="$REV" --build-arg VERSION="$VERSION" \
+            -t "prebid-server:tpc-${REV:0:8}" src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache: false
+
+      - name: Binary identity (go version -m)
+        id: bin
+        env:
+          REV: ${{ steps.rev.outputs.rev }}
+        run: |
+          cid=$(docker create "prebid-server:tpc-${REV:0:8}")
+          docker cp "$cid:/usr/local/bin/prebid-server" ./prebid-server
+          docker rm "$cid" >/dev/null
+          go version -m ./prebid-server | tee buildinfo.txt | grep -E 'vcs\.(revision|modified)'
+          grep -q "vcs.revision=$REV" buildinfo.txt
+          grep -q 'vcs.modified=false' buildinfo.txt
+          echo "binary_sha256=$(sha256sum prebid-server | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          label=$(docker inspect "prebid-server:tpc-${REV:0:8}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+          test "$label" = "$REV"
+          echo "image_id=$(docker inspect "prebid-server:tpc-${REV:0:8}" --format '{{.Id}}')" >> "$GITHUB_OUTPUT"
+
+      - name: Isolated smoke (internal network, no outside access)
+        id: smoke
+        env:
+          REV: ${{ steps.rev.outputs.rev }}
+        run: |
+          mkdir -p smoke
+          # Throwaway config: gdpr.default_value must be an unquoted boolean, and adapters that need
+          # private extra_info (production keys) are disabled; production config is mounted on the hosts.
+          cat > smoke/pbs.yaml <<'YAML'
+          gdpr:
+            default_value: false
+          adapters:
+            thrad:
+              disabled: true
+            thradx:
+              disabled: true
+            imprezia:
+              disabled: true
+            gravity:
+              disabled: true
+            kontext:
+              disabled: true
+          YAML
+          docker network create --internal pbs-smoke >/dev/null
+          docker run -d --name pbs-smoke --network pbs-smoke -v "$PWD/smoke:/etc/config:ro" "prebid-server:tpc-${REV:0:8}" >/dev/null
+          ok=''
+          for i in $(seq 1 30); do
+            s=$(docker run --rm --network pbs-smoke curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}' http://pbs-smoke:8000/status || true)
+            if [ "$s" = 200 ] || [ "$s" = 204 ]; then ok=$s; break; fi
+            sleep 2
+          done
+          v=$(docker run --rm --network pbs-smoke curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}' http://pbs-smoke:8000/version || true)
+          docker logs pbs-smoke 2>&1 | tail -20
+          docker rm -f pbs-smoke >/dev/null
+          test -n "$ok" && test "$v" = 200 || { echo "smoke failed: status=$ok version=$v" >&2; exit 1; }
+          echo "status_http=$ok" >> "$GITHUB_OUTPUT"
+          echo "version_http=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Image archive and manifest
+        env:
+          REV: ${{ steps.rev.outputs.rev }}
+          VERSION: ${{ steps.src.outputs.version }}
+          IMAGE_ID: ${{ steps.bin.outputs.image_id }}
+          BINARY_SHA: ${{ steps.bin.outputs.binary_sha256 }}
+          STATUS_HTTP: ${{ steps.smoke.outputs.status_http }}
+          VERSION_HTTP: ${{ steps.smoke.outputs.version_http }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          docker save "prebid-server:tpc-${REV:0:8}" | gzip -n > image.tar.gz
+          python3 - <<'PY'
+          import hashlib, json, os, re, tarfile
+          sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
+          # image_id is what `docker load` reports on the PBS hosts (Docker 25, classic image store):
+          # the image config digest, named in the saved archive's own manifest.json. This runner's
+          # Docker uses the containerd store, where `docker inspect .Id` is the OCI manifest digest
+          # instead, so deploy.py's `docker image inspect <image_id>` after `docker load` would fail.
+          # The runner's value is kept as runner_image_id.
+          with tarfile.open('image.tar.gz', 'r:gz') as t:
+              saved = json.load(t.extractfile('manifest.json'))
+          assert len(saved) == 1 and saved[0]['RepoTags'] == [f"prebid-server:tpc-{os.environ['REV'][:8]}"], saved
+          config = re.fullmatch(r'(?:blobs/sha256/)?([0-9a-f]{64})(?:\.json)?', saved[0]['Config'])
+          assert config, saved[0]['Config']
+          m = {
+              'source_revision': os.environ['REV'], 'source_branch': 'master', 'version': os.environ['VERSION'],
+              'image_id': 'sha256:' + config.group(1), 'runner_image_id': os.environ['IMAGE_ID'],
+              'image_tag': f"prebid-server:tpc-{os.environ['REV'][:8]}",
+              'binary_sha256': os.environ['BINARY_SHA'], 'vcs_modified': False, 'architecture': 'linux/amd64',
+              'status_http': int(os.environ['STATUS_HTTP']), 'version_http': int(os.environ['VERSION_HTTP']),
+              'external_network': 'none (internal Docker network; adapters needing private keys disabled)',
+              'archive_sha256': sha('image.tar.gz'), 'source_archive_sha256': sha('source.tar.gz'),
+              'built_by': os.environ['RUN_URL'], 'production_deployed': False,
+          }
+          json.dump(m, open('manifest.json', 'w'), indent=1)
+          print(json.dumps(m, indent=1))
+          PY
+          {
+            echo "### Release package \`tpc-${REV:0:8}\`"
+            echo '```json'; cat manifest.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pbs-release-${{ steps.rev.outputs.short }}
+          path: |
+            image.tar.gz
+            source.tar.gz
+            manifest.json
+          retention-days: 30
+          compression-level: 0

@@ -14,6 +14,7 @@ Fork-only files and directories:
 - `adapters/tpc/` — TPC stub bidder (see "Custom adapters")
 - `modules/tpc/activitylog/`, `modules/tpc/paramfanout/`, `modules/tpc/profanityfilter/` — TPC hook modules (see "Custom hook modules")
 - the fork edit to `config/structlog.go` (see "Upstream files with fork edits")
+- `.github/workflows/release-package.yml` — builds the pinned release package (image, source, manifest) from an approved `master` revision in CI (see "Deploy mechanism")
 
 TPC-specific adapters live under `adapters/tpc*`, and TPC-specific hook
 modules live under `modules/tpc/*`, per the conventions below.
@@ -136,7 +137,10 @@ deploy remote's `main` still triggers the old post-receive rebuild on the
 host, which would replace the released image with one built from git on the
 host, outside the release checks.
 
-Release outline (exact commands live with the release owner):
+Release outline (exact commands live with the release owner). Steps 1–3's
+build and packaging run in CI: dispatch **Release package (pinned PBS image)**
+(`.github/workflows/release-package.yml`) with the approved revision and use
+its artifact (`image.tar.gz`, `source.tar.gz`, `manifest.json`):
 
 1. Merge to `master`. Build from a **clean clone** at the merge commit:
    `docker buildx build --platform linux/amd64 --load --build-arg TEST=false

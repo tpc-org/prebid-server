@@ -20,15 +20,12 @@
     "device": {
       "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
       "ip": "203.0.113.9"
-    },
-    "app": {
-      "bundle": "com.example.chatapp"
     }
   },
   "expectedBidResponses": [],
   "expectedMakeRequestsErrors": [
     {
-      "value": "kontext: only web (site) requests are sent",
+      "value": "kontext: a request needs exactly one of site or app",
       "comparison": "literal"
     }
   ]

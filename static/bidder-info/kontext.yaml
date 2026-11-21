@@ -7,8 +7,8 @@
 # Builder fails without it and PBS will not start. See
 # adapters/kontext/kontext.go.
 #
-# Native on web only: the formats and environment agreed with Kontext. Kontext
-# answers anything else with a no-bid.
+# Native only, on web and in-app (HOL-164). Kontext no-bids any format or
+# environment it has not agreed for our partner id; app is not agreed yet.
 endpoint: "https://rtb.kontext.ai/openrtb2/bid"
 disabled: true
 endpointCompression: gzip
@@ -17,6 +17,9 @@ maintainer:
 openrtb:
   version: 2.6
 capabilities:
+  app:
+    mediaTypes:
+      - native
   site:
     mediaTypes:
       - native
