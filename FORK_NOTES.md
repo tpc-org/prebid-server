@@ -293,12 +293,18 @@ To add a new TPC-specific PBS adapter:
        disabled: false
 ```
 
-4. Release the config change through the pbs-settings settings release,
-   one region at a time with separate approval (see pbs-settings
-   `scripts/README.md`).
-5. Release the new binary through the image release outline in
-   "Deploy mechanism" above (`deploy.py prepare` / `activate`). Do not
-   `git push production` from this repo.
+4. Release the new binary first, through the image release outline in
+   "Deploy mechanism" above (`deploy.py prepare` / `activate`), in both
+   regions. Do not `git push production` from this repo.
+5. Then release the config through the pbs-settings settings release, one
+   region at a time with separate approval (see pbs-settings
+   `scripts/README.md`), with the adapter `disabled: true`; enable it in a
+   second settings release.
+
+(Order matters: a `pbs.yaml` naming an adapter the running binary doesn't
+know crashes PBS on boot, and so does a binary whose adapter needs config it
+doesn't have yet. Binary first, config disabled, then enable; this caused a
+us-east outage on 2026-08-21. The brain's demand card follows this order.)
 
 ## Key learnings preserved
 
