@@ -1,0 +1,125 @@
+{
+  "mockBidRequest": {
+    "id": "req-2",
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":1,\"required\":1,\"title\":{\"len\":25}},{\"id\":2,\"required\":1,\"img\":{\"type\":3,\"w\":1200,\"h\":400}},{\"id\":4,\"required\":1,\"data\":{\"type\":2,\"len\":90}},{\"id\":5,\"required\":0,\"data\":{\"type\":1,\"len\":25}},{\"id\":6,\"required\":0,\"data\":{\"type\":12,\"len\":15}},{\"id\":7,\"required\":1,\"img\":{\"type\":1,\"wmin\":300,\"hmin\":300}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "slotId": "ca10d818-1795356330777",
+            "messages": [
+              {
+                "role": "user",
+                "content": "gift ideas for my mum"
+              }
+            ],
+            "sessionId": "thrad-chat-77"
+          }
+        }
+      }
+    ],
+    "app": {
+      "bundle": "com.connectinno.chataiultraapp"
+    },
+    "device": {
+      "ua": "Mozilla/5.0",
+      "geo": {
+        "country": "GBR"
+      }
+    }
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "http://any.url/ad-server/v1/get-ad",
+        "body": {
+          "slot_id": "ca10d818-1795356330777",
+          "context": {
+            "messages": [
+              {
+                "role": "user",
+                "content": "gift ideas for my mum"
+              }
+            ],
+            "session_id": "thrad-chat-77"
+          },
+          "surface_type": "conversational",
+          "format_preferences": [
+            "native"
+          ],
+          "geo": {
+            "country": "GB"
+          }
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "X-Mcp-Api-Key": [
+            "test-key"
+          ]
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "ads": [
+            {
+              "id": "10d78976-5949-465b-9814-1b2051dd8081",
+              "creative_id": "015e3058-289b-46c2-8948-ef91d4a31156",
+              "format": "native",
+              "title": "Packed with a Purpose: gift boxes",
+              "content": "Struggling with gift ideas? Curated gift boxes that give back.",
+              "cta": "Connect with an Expert",
+              "image_url": "https://cdn.adgentek.ai/c/015e3058.jpg",
+              "click_url": "https://api.adgentek.ai/ad-server/v1/click-redirect?d=abc&cp=4.6629",
+              "impression_url": "https://api.adgentek.ai/ad-server/v1/track-impression?d=abc&cp=4.6629",
+              "placement": {
+                "position": "inline",
+                "paragraph_index": 1
+              },
+              "targeting_score": 0.5,
+              "bid_price": 4.66,
+              "cleared_price_usd": 4.66,
+              "advertiser_domain": "packedwithpurpose.eco",
+              "adomain": [
+                "packedwithpurpose.eco"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": [
+        {
+          "bid": {
+            "id": "10d78976-5949-465b-9814-1b2051dd8081",
+            "impid": "imp-1",
+            "price": 4.66,
+            "adm": "{\"ver\":\"1.2\",\"assets\":[{\"id\":1,\"title\":{\"text\":\"Packed with a Purpose: gi\"}},{\"id\":2,\"img\":{\"type\":3,\"url\":\"https://cdn.adgentek.ai/c/015e3058.jpg\"}},{\"id\":4,\"data\":{\"value\":\"Struggling with gift ideas? Curated gift boxes that give back.\"}},{\"id\":5,\"data\":{\"value\":\"packedwithpurpose.eco\"}},{\"id\":6,\"data\":{\"value\":\"Connect with an\"}}],\"link\":{\"url\":\"https://api.adgentek.ai/ad-server/v1/click-redirect?d=abc&cp=4.6629\"},\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://api.adgentek.ai/ad-server/v1/track-impression?d=abc&cp=4.6629\"}]}",
+            "adomain": [
+              "packedwithpurpose.eco"
+            ],
+            "crid": "015e3058-289b-46c2-8948-ef91d4a31156",
+            "mtype": 4
+          },
+          "type": "native"
+        }
+      ]
+    }
+  ]
+}

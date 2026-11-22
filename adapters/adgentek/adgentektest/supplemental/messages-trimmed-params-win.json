@@ -1,0 +1,187 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "slotId": "ca10d818-1795354687823",
+            "messages": [
+              {
+                "role": "user",
+                "content": "q0"
+              },
+              {
+                "role": "user",
+                "content": "q1"
+              },
+              {
+                "role": "user",
+                "content": "q2"
+              },
+              {
+                "role": "user",
+                "content": "q3"
+              },
+              {
+                "role": "user",
+                "content": "q4"
+              },
+              {
+                "role": "user",
+                "content": "q5"
+              },
+              {
+                "role": "user",
+                "content": "q6"
+              },
+              {
+                "role": "user",
+                "content": "q7"
+              },
+              {
+                "role": "user",
+                "content": "q8"
+              },
+              {
+                "role": "user",
+                "content": "q9"
+              },
+              {
+                "role": "user",
+                "content": "q10"
+              },
+              {
+                "role": "user",
+                "content": "q11"
+              },
+              {
+                "role": "tool",
+                "content": "x"
+              },
+              {
+                "role": "assistant",
+                "content": ""
+              }
+            ],
+            "surfaceType": "search",
+            "custom": {
+              "sub_id": "promptessor"
+            }
+          }
+        }
+      }
+    ],
+    "site": {
+      "domain": "promptessor.com",
+      "page": "https://promptessor.com/chat",
+      "publisher": {
+        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+      },
+      "ext": {
+        "data": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "best mattress for back pain under 1500"
+            },
+            {
+              "role": "assistant",
+              "content": "For back pain, medium-firm hybrid mattresses..."
+            }
+          ]
+        }
+      }
+    },
+    "device": {
+      "ua": "Mozilla/5.0"
+    }
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "http://any.url/ad-server/v1/get-ad",
+        "body": {
+          "slot_id": "ca10d818-1795354687823",
+          "context": {
+            "messages": [
+              {
+                "role": "user",
+                "content": "q2"
+              },
+              {
+                "role": "user",
+                "content": "q3"
+              },
+              {
+                "role": "user",
+                "content": "q4"
+              },
+              {
+                "role": "user",
+                "content": "q5"
+              },
+              {
+                "role": "user",
+                "content": "q6"
+              },
+              {
+                "role": "user",
+                "content": "q7"
+              },
+              {
+                "role": "user",
+                "content": "q8"
+              },
+              {
+                "role": "user",
+                "content": "q9"
+              },
+              {
+                "role": "user",
+                "content": "q10"
+              },
+              {
+                "role": "user",
+                "content": "q11"
+              }
+            ]
+          },
+          "surface_type": "search",
+          "format_preferences": [
+            "native"
+          ],
+          "custom": {
+            "sub_id": "promptessor"
+          }
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "X-Mcp-Api-Key": [
+            "test-key"
+          ]
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "ads": []
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": []
+}

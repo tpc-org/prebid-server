@@ -10,6 +10,7 @@ import (
 	"github.com/prebid/prebid-server/v4/adapters/adelement"
 	"github.com/prebid/prebid-server/v4/adapters/adf"
 	"github.com/prebid/prebid-server/v4/adapters/adgeneration"
+	"github.com/prebid/prebid-server/v4/adapters/adgentek"
 	"github.com/prebid/prebid-server/v4/adapters/adhese"
 	"github.com/prebid/prebid-server/v4/adapters/adkernel"
 	"github.com/prebid/prebid-server/v4/adapters/adkernelAdn"
@@ -304,6 +305,7 @@ func newAdapterBuilders() map[openrtb_ext.BidderName]adapters.Builder {
 		openrtb_ext.BidderAdelement:         adelement.Builder,
 		openrtb_ext.BidderAdf:               adf.Builder,
 		openrtb_ext.BidderAdgeneration:      adgeneration.Builder,
+		openrtb_ext.BidderAdgentek:          adgentek.Builder,
 		openrtb_ext.BidderAdhese:            adhese.Builder,
 		openrtb_ext.BidderAdkernel:          adkernel.Builder,
 		openrtb_ext.BidderAdkernelAdn:       adkernelAdn.Builder,

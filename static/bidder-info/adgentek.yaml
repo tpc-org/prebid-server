@@ -1,0 +1,20 @@
+# Adgentek (HOL-157): a REST ad server for AI conversations, not an OpenRTB
+# bidder. The adapter turns each native imp into one
+# POST <endpoint> with the publisher key in x-mcp-api-key, and the reply's
+# ad into a native bid. Spec: docs.adgentek.ai/publishers/integrations/rest-api.
+#
+# Disabled here because the publisher key is host-specific. pbs.yaml enables
+# the bidder with "disabled: false" and must add extra_info
+# '{"apiKey":"..."}' in the same release: Builder fails without it and PBS
+# will not start. See adapters/adgentek/adgentek.go.
+endpoint: "https://api.adgentek.ai/ad-server/v1/get-ad"
+disabled: true
+maintainer:
+  email: "prebid@tpcsrv.com"
+capabilities:
+  site:
+    mediaTypes:
+      - native
+  app:
+    mediaTypes:
+      - native
