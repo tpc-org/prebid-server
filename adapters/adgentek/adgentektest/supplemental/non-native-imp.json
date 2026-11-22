@@ -1,0 +1,61 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "imp": [
+      {
+        "id": "imp-1",
+        "banner": {
+          "format": [
+            {
+              "w": 300,
+              "h": 250
+            }
+          ]
+        },
+        "ext": {
+          "bidder": {
+            "slotId": "ca10d818-1795354687823"
+          }
+        }
+      }
+    ],
+    "site": {
+      "domain": "promptessor.com",
+      "page": "https://promptessor.com/chat",
+      "publisher": {
+        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+      },
+      "ext": {
+        "data": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "best mattress for back pain under 1500"
+            },
+            {
+              "role": "assistant",
+              "content": "For back pain, medium-firm hybrid mattresses..."
+            }
+          ],
+          "sessionId": "chat-8f2a"
+        }
+      }
+    },
+    "device": {
+      "ua": "Mozilla/5.0",
+      "ip": "203.0.113.9",
+      "geo": {
+        "country": "USA",
+        "region": "CA",
+        "city": "San Francisco",
+        "zip": "94107"
+      }
+    }
+  },
+  "expectedMakeRequestsErrors": [
+    {
+      "value": "adgentek: imp imp-1 has no native object",
+      "comparison": "literal"
+    }
+  ]
+}

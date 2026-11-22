@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Adgentek Adapter Params",
+  "description": "A schema which validates params accepted by the Adgentek adapter. Nothing is required: a missing value must never reject the whole imp (the adapter skips an imp without a slot id or conversation itself).",
+  "type": "object",
+  "properties": {
+    "slotId": {
+      "type": "string",
+      "description": "The Adgentek placement (slot) id minted for this publisher, e.g. ca10d818-1795354687823. Static, set in the Stored Imp."
+    },
+    "messages": {
+      "type": "array",
+      "description": "Conversation turns, oldest first. Dynamic. Our bundles send these as bidder-scoped site.ext.data.messages instead; dsp-connector sends them here.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {"type": "string"},
+          "content": {"type": "string"}
+        }
+      }
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Stable per-conversation id, used by Adgentek for frequency capping. Dynamic."
+    },
+    "surfaceType": {
+      "type": "string",
+      "enum": ["conversational", "search", "voice", "image", "video", "coding", "web", "agent"],
+      "description": "Adgentek surface_type. Defaults to conversational."
+    },
+    "custom": {
+      "type": "object",
+      "description": "String-to-string reporting tags sent as Adgentek's custom map. Bounded values only, never personal data.",
+      "additionalProperties": {"type": "string"}
+    }
+  }
+}
