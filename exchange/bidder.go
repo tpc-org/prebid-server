@@ -84,6 +84,11 @@ type bidRequestOptions struct {
 type extraBidderRespInfo struct {
 	respProcessingStartTime time.Time
 	seatNonBidBuilder       SeatNonBidBuilder
+	// madeRequests is true when the bidder had something to wait for (an
+	// outbound HTTP call or a stored response). A bidder that makes no
+	// request answers at once, so it never ends the wait for secondary
+	// bidders on its own (see getAllBids).
+	madeRequests bool
 }
 
 type extraAuctionResponseInfo struct {
@@ -275,6 +280,8 @@ func (bidder *BidderAdapter) requestBid(ctx context.Context, bidderRequest Bidde
 			Seat:      string(bidderRequest.BidderName),
 		},
 	}
+
+	extraRespInfo.madeRequests = dataLen > 0
 
 	// If the bidder made multiple requests, we still want them to enter as many bids as possible...
 	// even if the timeout occurs sometime halfway through.
