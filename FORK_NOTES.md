@@ -65,6 +65,21 @@ including it in any upstream branch.
   upstream issue (`app_secret`, `recaptcha_secret`, `override_token`,
   `client_key`), so it could go upstream — but not with the fork-specific
   comment as-is.
+- **Secondary bidders** (2026-11-24, prebid/prebid-server#2620, mirrors
+  PBS-Java #4331) — `exchange/exchange.go` (`getAllBids`, `waitTracker`,
+  `resolveSecondaryBidders`, panic path keeps the bidder name),
+  `exchange/bidder.go` (`extraBidderRespInfo.madeRequests`),
+  `config/account.go` (`auction.secondary_bidders`),
+  `openrtb_ext/request.go` (`ext.prebid.secondarybidders`, request replaces
+  account), tests in `exchange/secondary_bidders_test.go`. The auction stops
+  waiting once every primary bidder has answered, and an outstanding
+  secondary gets the warning "secondary bidder timed out, auction proceeded"
+  plus a 101 timeout non-bid. One deliberate difference from Java: a primary
+  that made no outbound request (our `tpc` stub) never ends the wait, so
+  Stored Imps with only the stub plus a secondary still hear the secondary.
+  Configure per site in a pbs-settings auction Stored Request:
+  `ext.prebid.secondarybidders: ["kontext"]`. Upstreamable as a feature PR
+  (generic; no fork names in the code).
 
 ## Upstream PR workflow
 

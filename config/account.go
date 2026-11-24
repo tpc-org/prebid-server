@@ -54,6 +54,15 @@ type Account struct {
 	Privacy                 AccountPrivacy                              `mapstructure:"privacy" json:"privacy"`
 	PreferredMediaType      openrtb_ext.PreferredMediaType              `mapstructure:"preferredmediatype" json:"preferredmediatype"`
 	TargetingPrefix         string                                      `mapstructure:"targeting_prefix" json:"targeting_prefix"`
+	Auction                 AccountAuction                              `mapstructure:"auction" json:"auction"`
+}
+
+// AccountAuction holds account-level auction controls.
+type AccountAuction struct {
+	// SecondaryBidders lists bidders the auction does not wait for once every
+	// other bidder has responded (prebid/prebid-server#2620). A request's
+	// ext.prebid.secondarybidders replaces this list.
+	SecondaryBidders []string `mapstructure:"secondary_bidders" json:"secondary_bidders"`
 }
 
 // AccountCookieSync represents the account-level defaults for the cookie sync endpoint.

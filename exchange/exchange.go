@@ -105,6 +105,7 @@ type bidResponseWrapper struct {
 	adapter                 openrtb_ext.BidderName
 	bidderResponseStartTime time.Time
 	seatNonBidBuilder       SeatNonBidBuilder
+	madeRequests            bool
 }
 
 type BidIDGenerator interface {
@@ -394,7 +395,8 @@ func (e *exchange) HoldAuction(ctx context.Context, r *AuctionRequest, debugLog 
 		liveAdaptersPreferredMediaType := getBidderPreferredMediaTypeMap(requestExtPrebid, &r.Account, liveAdapters, e.singleFormatBidders)
 
 		var extraRespInfo extraAuctionResponseInfo
-		adapterBids, adapterExtra, extraRespInfo = e.getAllBids(auctionCtx, bidderRequests, bidAdjustmentFactors, conversions, accountDebugAllow, r.GlobalPrivacyControlHeader, debugLog.DebugOverride, alternateBidderCodes, requestExtLegacy.Prebid.Experiment, r.HookExecutor, r.StartTime, bidAdjustmentRules, r.TmaxAdjustments, responseDebugAllow, liveAdaptersPreferredMediaType)
+		secondaryBidders := resolveSecondaryBidders(requestExtPrebid.SecondaryBidders, r.Account.Auction.SecondaryBidders)
+		adapterBids, adapterExtra, extraRespInfo = e.getAllBids(auctionCtx, bidderRequests, bidAdjustmentFactors, conversions, accountDebugAllow, r.GlobalPrivacyControlHeader, debugLog.DebugOverride, alternateBidderCodes, requestExtLegacy.Prebid.Experiment, r.HookExecutor, r.StartTime, bidAdjustmentRules, r.TmaxAdjustments, responseDebugAllow, liveAdaptersPreferredMediaType, secondaryBidders)
 		fledge = extraRespInfo.fledge
 		anyBidsReturned = extraRespInfo.bidsFound
 		r.BidderResponseStartTime = extraRespInfo.bidderResponseStartTime
@@ -726,7 +728,8 @@ func (e *exchange) getAllBids(
 	bidAdjustmentRules map[string][]openrtb_ext.Adjustment,
 	tmaxAdjustments *TmaxAdjustmentsPreprocessed,
 	responseDebugAllowed bool,
-	liveAdaptersPreferredMediaType openrtb_ext.PreferredMediaType) (
+	liveAdaptersPreferredMediaType openrtb_ext.PreferredMediaType,
+	secondaryBidders map[openrtb_ext.BidderName]struct{}) (
 	map[openrtb_ext.BidderName]*entities.PbsOrtbSeatBid,
 	map[openrtb_ext.BidderName]*seatResponseExtra,
 	extraAuctionResponseInfo) {
@@ -781,6 +784,7 @@ func (e *exchange) getAllBids(
 			elapsed := time.Since(start)
 			brw.adapterSeatBids = seatBids
 			brw.seatNonBidBuilder = extraBidderRespInfo.seatNonBidBuilder
+			brw.madeRequests = extraBidderRespInfo.madeRequests
 			// Structure to record extra tracking data generated during bidding
 			ae := new(seatResponseExtra)
 			ae.ResponseTimeMillis = int(elapsed / time.Millisecond)
@@ -809,9 +813,13 @@ func (e *exchange) getAllBids(
 		go bidderRunner(bidder, conversions)
 	}
 
-	// Wait for the bidders to do their thing
-	for i := 0; i < len(bidderRequests); i++ {
+	// Wait for the bidders to do their thing. With secondary bidders, stop as
+	// soon as every primary bidder has responded and at least one of them had
+	// something to wait for (see waitTracker).
+	wait := newWaitTracker(bidderRequests, secondaryBidders)
+	for i := 0; i < len(bidderRequests) && !wait.done(); i++ {
 		brw := <-chBids
+		wait.received(brw)
 		if !brw.bidderResponseStartTime.IsZero() {
 			extraRespInfo.bidderResponseStartTime = brw.bidderResponseStartTime
 		}
@@ -839,7 +847,108 @@ func (e *exchange) getAllBids(
 
 	}
 
+	// Secondary bidders still outstanding are timed out: a warning, and a
+	// timeout non-bid for each of their imps. Their goroutines finish on their
+	// own (chBids is buffered for every bidder) and their results are dropped.
+	for _, bidderRequest := range wait.outstanding() {
+		adapterExtra[bidderRequest.BidderName] = &seatResponseExtra{
+			Warnings: []openrtb_ext.ExtBidderMessage{{
+				Code:    errortypes.TimeoutErrorCode,
+				Message: secondaryBidderTimeoutMessage,
+			}},
+		}
+		impIDs := make([]string, 0, len(bidderRequest.BidRequest.Imp))
+		for _, imp := range bidderRequest.BidRequest.Imp {
+			impIDs = append(impIDs, imp.ID)
+		}
+		extraRespInfo.seatNonBidBuilder.rejectImps(impIDs, ErrorTimeout, string(bidderRequest.BidderName))
+	}
+
 	return adapterBids, adapterExtra, extraRespInfo
+}
+
+const secondaryBidderTimeoutMessage = "secondary bidder timed out, auction proceeded"
+
+// resolveSecondaryBidders returns the bidders the auction need not wait for.
+// The request's list, when present (even empty), replaces the account's.
+func resolveSecondaryBidders(requestList, accountList []string) map[openrtb_ext.BidderName]struct{} {
+	list := accountList
+	if requestList != nil {
+		list = requestList
+	}
+	if len(list) == 0 {
+		return nil
+	}
+	set := make(map[openrtb_ext.BidderName]struct{}, len(list))
+	for _, name := range list {
+		set[openrtb_ext.BidderName(name)] = struct{}{}
+	}
+	return set
+}
+
+// waitTracker decides when getAllBids can stop waiting. Without secondary
+// bidders it waits for every bidder. With them, it stops once every primary
+// bidder has responded, provided at least one primary had something to wait
+// for: a bidder that makes no request (a no-op stub) answers at once and must
+// not end the auction before the secondaries have had a chance. If no primary
+// made a request, or every bidder is secondary, it waits for every bidder.
+type waitTracker struct {
+	pending          map[openrtb_ext.BidderName]BidderRequest
+	secondary        map[openrtb_ext.BidderName]struct{}
+	primaryPending   int
+	primaryRequested bool
+}
+
+func newWaitTracker(bidderRequests []BidderRequest, secondary map[openrtb_ext.BidderName]struct{}) *waitTracker {
+	w := &waitTracker{pending: make(map[openrtb_ext.BidderName]BidderRequest, len(bidderRequests))}
+	for _, br := range bidderRequests {
+		w.pending[br.BidderName] = br
+		if _, ok := secondary[br.BidderName]; !ok {
+			w.primaryPending++
+		}
+	}
+	// Every bidder secondary: treat them all as primary.
+	if w.primaryPending > 0 {
+		w.secondary = secondary
+	} else {
+		w.primaryPending = len(bidderRequests)
+	}
+	return w
+}
+
+func (w *waitTracker) isSecondary(name openrtb_ext.BidderName) bool {
+	_, ok := w.secondary[name]
+	return ok
+}
+
+func (w *waitTracker) received(brw *bidResponseWrapper) {
+	if _, ok := w.pending[brw.bidder]; !ok {
+		return
+	}
+	delete(w.pending, brw.bidder)
+	if !w.isSecondary(brw.bidder) {
+		w.primaryPending--
+		if brw.madeRequests {
+			w.primaryRequested = true
+		}
+	}
+}
+
+func (w *waitTracker) done() bool {
+	return len(w.secondary) > 0 && w.primaryPending == 0 && w.primaryRequested
+}
+
+// outstanding returns the secondary bidders cut off by an early stop.
+func (w *waitTracker) outstanding() []BidderRequest {
+	if !w.done() {
+		return nil
+	}
+	out := make([]BidderRequest, 0, len(w.pending))
+	for _, br := range w.pending {
+		out = append(out, br)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].BidderName < out[j].BidderName })
+	return out
 }
 
 func collectFledgeFromSeatBid(fledge *openrtb_ext.Fledge, bidderName openrtb_ext.BidderName, adapterName openrtb_ext.BidderName, seatBid *entities.PbsOrtbSeatBid) *openrtb_ext.Fledge {
@@ -884,6 +993,8 @@ func (e *exchange) recoverSafely(bidderRequests []BidderRequest,
 				e.me.RecordAdapterPanic(bidderRequest.BidderLabels)
 				// Let the master request know that there is no data here
 				brw := new(bidResponseWrapper)
+				brw.bidder = bidderRequest.BidderName
+				brw.adapter = bidderRequest.BidderCoreName
 				brw.adapterExtra = new(seatResponseExtra)
 				chBids <- brw
 			}
