@@ -1,0 +1,214 @@
+{
+  "mockBidRequest": {
+    "id": "req-1",
+    "imp": [
+      {
+        "id": "imp-1",
+        "native": {
+          "request": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"required\":1,\"title\":{\"len\":80}},{\"id\":1,\"required\":0,\"img\":{\"type\":3,\"wmin\":1,\"hmin\":1}},{\"id\":2,\"required\":0,\"data\":{\"type\":2,\"len\":100}},{\"id\":3,\"required\":0,\"data\":{\"type\":1}},{\"id\":4,\"required\":0,\"data\":{\"type\":12,\"len\":30}}]}",
+          "ver": "1.2"
+        },
+        "ext": {
+          "bidder": {
+            "slotId": "ca10d818-1795354687823"
+          }
+        }
+      }
+    ],
+    "site": {
+      "domain": "promptessor.com",
+      "page": "https://promptessor.com/chat",
+      "publisher": {
+        "id": "d0cd3243-716f-4f9c-b074-f72637de26f3"
+      },
+      "ext": {
+        "data": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "best mattress for back pain under 1500"
+            },
+            {
+              "role": "assistant",
+              "content": "For back pain, medium-firm hybrid mattresses..."
+            }
+          ],
+          "sessionId": "chat-8f2a"
+        }
+      }
+    },
+    "device": {
+      "ua": "Mozilla/5.0",
+      "ip": "203.0.113.9",
+      "geo": {
+        "country": "USA",
+        "region": "CA",
+        "city": "San Francisco",
+        "zip": "94107"
+      }
+    }
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+        "uri": "http://any.url/ad-server/v1/get-ad",
+        "body": {
+          "slot_id": "ca10d818-1795354687823",
+          "context": {
+            "messages": [
+              {
+                "role": "user",
+                "content": "best mattress for back pain under 1500"
+              },
+              {
+                "role": "assistant",
+                "content": "For back pain, medium-firm hybrid mattresses..."
+              }
+            ],
+            "session_id": "chat-8f2a"
+          },
+          "surface_type": "conversational",
+          "format_preferences": [
+            "native"
+          ],
+          "geo": {
+            "country": "US",
+            "region": "CA",
+            "city": "San Francisco",
+            "zip": "94107"
+          }
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ],
+          "Accept": [
+            "application/json"
+          ],
+          "X-Mcp-Api-Key": [
+            "test-key"
+          ]
+        },
+        "impIDs": [
+          "imp-1"
+        ]
+      },
+      "mockResponse": {
+        "status": 200,
+        "body": {
+          "ads": [
+            {
+              "id": "10d78976-5949-465b-9814-1b2051dd8081",
+              "creative_id": "015e3058-289b-46c2-8948-ef91d4a31156",
+              "format": "native",
+              "title": "Packed with a Purpose",
+              "content": "Struggling with gift ideas? Curated gift boxes that give back.",
+              "cta": "Connect with an Expert",
+              "image_url": "https://cdn.adgentek.ai/c/015e3058.jpg",
+              "click_url": "https://api.adgentek.ai/ad-server/v1/click-redirect?d=abc&cp=4.6629",
+              "impression_url": "https://api.adgentek.ai/ad-server/v1/track-impression?d=abc&cp=4.6629",
+              "placement": {
+                "position": "inline",
+                "paragraph_index": 1
+              },
+              "targeting_score": 0.5,
+              "bid_price": 4.66,
+              "cleared_price_usd": 4.66,
+              "advertiser_domain": "packedwithpurpose.eco",
+              "adomain": [
+                "packedwithpurpose.eco"
+              ],
+              "native_eventtrackers": [
+                {
+                  "event": 1,
+                  "method": 1,
+                  "url": "https://dsp.example/imp?a=1"
+                },
+                {
+                  "event": 2,
+                  "method": 1,
+                  "url": "https://dsp.example/view?a=1"
+                },
+                {
+                  "event": 1,
+                  "method": 2,
+                  "url": "https://dsp.example/imp.js"
+                },
+                {
+                  "event": 3,
+                  "method": 1,
+                  "url": "https://dsp.example/mrc100"
+                },
+                {
+                  "event": 1,
+                  "method": 1,
+                  "url": "http://dsp.example/insecure"
+                },
+                {
+                  "event": 1,
+                  "method": 1,
+                  "url": "https://api.adgentek.ai/ad-server/v1/track-impression?d=abc&cp=4.6629"
+                }
+              ],
+              "deferred_trackers": {
+                "native_eventtrackers": [
+                  {
+                    "event": 1,
+                    "method": 1,
+                    "url": "https://dsp.example/imp?a=1"
+                  },
+                  {
+                    "event": 2,
+                    "method": 1,
+                    "url": "https://verifier.example/view"
+                  }
+                ],
+                "native_imptrackers": [
+                  "https://dsp.example/legacy-imp"
+                ],
+                "vast_impression_pixels": [
+                  "https://dsp.example/vast-imp"
+                ],
+                "native_jstrackers": [
+                  {
+                    "script": "<script src=\"https://verifier.example/v.js\"></script>"
+                  },
+                  {
+                    "script": "  "
+                  }
+                ],
+                "native_clicktrackers": [
+                  "https://dsp.example/click",
+                  "http://dsp.example/insecure-click",
+                  "https://dsp.example/click"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+      "currency": "USD",
+      "bids": [
+        {
+          "bid": {
+            "id": "10d78976-5949-465b-9814-1b2051dd8081",
+            "impid": "imp-1",
+            "price": 4.66,
+            "adm": "{\"ver\":\"1.2\",\"assets\":[{\"id\":0,\"title\":{\"text\":\"Packed with a Purpose\"}},{\"id\":1,\"img\":{\"type\":3,\"url\":\"https://cdn.adgentek.ai/c/015e3058.jpg\"}},{\"id\":2,\"data\":{\"value\":\"Struggling with gift ideas? Curated gift boxes that give back.\"}},{\"id\":3,\"data\":{\"value\":\"packedwithpurpose.eco\"}},{\"id\":4,\"data\":{\"value\":\"Connect with an Expert\"}}],\"link\":{\"url\":\"https://api.adgentek.ai/ad-server/v1/click-redirect?d=abc&cp=4.6629\",\"clicktrackers\":[\"https://dsp.example/click\"]},\"jstracker\":\"<script src=\\\"https://verifier.example/v.js\\\"></script>\",\"eventtrackers\":[{\"event\":1,\"method\":1,\"url\":\"https://api.adgentek.ai/ad-server/v1/track-impression?d=abc&cp=4.6629\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/imp?a=1\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/legacy-imp\"},{\"event\":1,\"method\":1,\"url\":\"https://dsp.example/vast-imp\"},{\"event\":2,\"method\":1,\"url\":\"https://dsp.example/view?a=1\"},{\"event\":2,\"method\":1,\"url\":\"https://verifier.example/view\"}]}",
+            "adomain": [
+              "packedwithpurpose.eco"
+            ],
+            "crid": "015e3058-289b-46c2-8948-ef91d4a31156",
+            "mtype": 4
+          },
+          "type": "native"
+        }
+      ]
+    }
+  ],
+  "description": "HOL-176: the buyer's trackers (top level and deferred_trackers) follow Adgentek's impression pixel, https only, deduplicated, in the SDK's order; JS trackers go in jstracker and click trackers in link.clicktrackers"
+}
