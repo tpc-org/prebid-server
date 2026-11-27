@@ -59,13 +59,25 @@
 //     the requested length;
 //   - link.url is click_url, which must be used as is: Adgentek's click
 //     filtering and CPC billing run on its redirect;
-//   - impression_url is the one and only tracker, an event 1 image tracker.
+//   - impression_url is the first tracker, an event 1 image tracker.
 //     Adgentek bills only for a pixel fired from the user's browser as an
 //     image request, never server-side (that is GIVT and is discarded). Our
-//     bundles fire it from the browser via Prebid core; a reseller (through
-//     dsp-connector) receives it as its first impression tracker and fires it
-//     client-side. There must be no second tracker: dsp-connector fires extra
-//     impression trackers itself, from the server.
+//     bundles fire it from the browser themselves (new Image()); a reseller
+//     (through dsp-connector) receives it as its first impression tracker and
+//     fires it client-side. It must stay first: dsp-connector passes on only
+//     the first image impression tracker.
+//   - the buyer's own trackers follow (HOL-176). When real demand fills, the
+//     ad carries the DSP's pixels, at the top level or under
+//     deferred_trackers, and Adgentek's Web SDK fires them all from the
+//     browser. The adapter passes the same set on, so a PBS render fires what
+//     the SDK would: native_eventtrackers (event 1 and 2, image),
+//     native_imptrackers and vast_impression_pixels (as event 1 image
+//     trackers), native_jstrackers (joined into jstracker; the SDK runs them
+//     in a sandboxed iframe once viewable) and native_clicktrackers
+//     (link.clicktrackers). Only https URLs are kept, without duplicates.
+//     The SDK fires the buyer's pixels before impression_url; they all fire in
+//     the same tick, and impression_url stays first here for dsp-connector's
+//     sake (it is also the order Adgentek's Integration Test lists).
 package adgentek
 
 import (
@@ -307,6 +319,41 @@ type adgentekAd struct {
 	ClearedPriceUSD  float64  `json:"cleared_price_usd"`
 	AdvertiserDomain string   `json:"advertiser_domain"`
 	ADomain          []string `json:"adomain"`
+
+	// The buyer's trackers. The SDK reads each list at the top level or
+	// under deferred_trackers; both are read here.
+	adgentekTrackers
+	DeferredTrackers *adgentekTrackers `json:"deferred_trackers"`
+}
+
+// adgentekTrackers are the DSP's own pixels on a filled ad, as Adgentek's
+// Web SDK (sdk.js 1.3.5) reads them.
+type adgentekTrackers struct {
+	NativeEventTrackers  []adgentekEventTracker `json:"native_eventtrackers"`
+	NativeImpTrackers    []string               `json:"native_imptrackers"`
+	VastImpressionPixels []string               `json:"vast_impression_pixels"`
+	NativeJSTrackers     []adgentekJSTracker    `json:"native_jstrackers"`
+	NativeClickTrackers  []string               `json:"native_clicktrackers"`
+}
+
+type adgentekEventTracker struct {
+	Event  int    `json:"event"`
+	Method int    `json:"method"`
+	URL    string `json:"url"`
+}
+
+type adgentekJSTracker struct {
+	Script string `json:"script"`
+}
+
+// trackerSets returns the top-level and deferred_trackers lists, in that
+// order.
+func (ad adgentekAd) trackerSets() []adgentekTrackers {
+	sets := []adgentekTrackers{ad.adgentekTrackers}
+	if ad.DeferredTrackers != nil {
+		sets = append(sets, *ad.DeferredTrackers)
+	}
+	return sets
 }
 
 func (a *adapter) MakeBids(request *openrtb2.BidRequest, requestData *adapters.RequestData, response *adapters.ResponseData) (*adapters.BidderResponse, []error) {
@@ -436,13 +483,10 @@ func buildNativeAdm(rawRequest string, ad adgentekAd) (string, error) {
 	}
 
 	resp := nativeResponse.Response{
-		Ver:  "1.2",
-		Link: nativeResponse.Link{URL: ad.ClickURL},
-		EventTrackers: []nativeResponse.EventTracker{{
-			Event:  native1.EventTypeImpression,
-			Method: native1.EventTrackingMethodImage,
-			URL:    ad.ImpressionURL,
-		}},
+		Ver:           "1.2",
+		Link:          nativeResponse.Link{URL: ad.ClickURL, ClickTrackers: clickTrackers(ad)},
+		EventTrackers: eventTrackers(ad),
+		JSTracker:     jsTracker(ad),
 	}
 	for _, want := range req.Assets {
 		id := want.ID
@@ -479,6 +523,82 @@ func buildNativeAdm(rawRequest string, ad adgentekAd) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// eventTrackers returns Adgentek's impression pixel first, then the buyer's
+// image trackers in the order the SDK fires them: impression (event 1)
+// eventtrackers, legacy imptrackers, VAST impression pixels, then viewable
+// (event 2) eventtrackers. Other events and JavaScript (method 2) URLs are
+// left out, as the SDK ignores them.
+func eventTrackers(ad adgentekAd) []nativeResponse.EventTracker {
+	seen := map[string]bool{}
+	var out []nativeResponse.EventTracker
+	add := func(event native1.EventType, url string) {
+		key := fmt.Sprintf("%d %s", event, url)
+		if !strings.HasPrefix(url, "https://") || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, nativeResponse.EventTracker{Event: event, Method: native1.EventTrackingMethodImage, URL: url})
+	}
+	add(native1.EventTypeImpression, ad.ImpressionURL)
+	sets := ad.trackerSets()
+	for _, set := range sets {
+		for _, t := range set.NativeEventTrackers {
+			if t.Event == int(native1.EventTypeImpression) && t.Method == int(native1.EventTrackingMethodImage) {
+				add(native1.EventTypeImpression, t.URL)
+			}
+		}
+	}
+	for _, set := range sets {
+		for _, u := range set.NativeImpTrackers {
+			add(native1.EventTypeImpression, u)
+		}
+	}
+	for _, set := range sets {
+		for _, u := range set.VastImpressionPixels {
+			add(native1.EventTypeImpression, u)
+		}
+	}
+	for _, set := range sets {
+		for _, t := range set.NativeEventTrackers {
+			if t.Event == int(native1.EventTypeViewableMRC50) && t.Method == int(native1.EventTrackingMethodImage) {
+				add(native1.EventTypeViewableMRC50, t.URL)
+			}
+		}
+	}
+	return out
+}
+
+// clickTrackers returns the buyer's https click pixels. Adgentek's own click
+// is counted by the click_url redirect, which is the link itself.
+func clickTrackers(ad adgentekAd) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, set := range ad.trackerSets() {
+		for _, u := range set.NativeClickTrackers {
+			if strings.HasPrefix(u, "https://") && !seen[u] {
+				seen[u] = true
+				out = append(out, u)
+			}
+		}
+	}
+	return out
+}
+
+// jsTracker joins the buyer's script trackers into the native response's
+// jstracker (HTML with the scripts in it). The SDK runs them in a sandboxed
+// iframe once the ad is viewable; our bundles do the same.
+func jsTracker(ad adgentekAd) string {
+	var scripts []string
+	for _, set := range ad.trackerSets() {
+		for _, t := range set.NativeJSTrackers {
+			if strings.TrimSpace(t.Script) != "" {
+				scripts = append(scripts, t.Script)
+			}
+		}
+	}
+	return strings.Join(scripts, "\n")
 }
 
 // truncate cuts s to at most n runes; n <= 0 means no limit. A Native

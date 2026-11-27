@@ -90,6 +90,7 @@ func Builder(cfg json.RawMessage, _ moduledeps.ModuleDeps) (interface{}, error) 
 			m.geo = db
 		}
 		m.ivt = newIVTStore(c.IVTDir)
+		m.ship = newShipper(m.ivt)
 	}
 	return m, nil
 }
@@ -102,6 +103,10 @@ type Module struct {
 	// ivt holds the end-user IVT lists — nil when no ivt_dir is configured
 	// (see enduser.go).
 	ivt *ivtStore
+	// ship queues lines with a `u` object for the off-host IVT pipeline —
+	// nil without ivt_dir, inert until ivt_dir/ship.json enables it (see
+	// shipper.go).
+	ship *shipper
 }
 
 // ── Per-imp data stashed between stages ────────────────────────────────────
@@ -350,7 +355,10 @@ func (m Module) writeActivityLine(stashed stashedActivity, resp *openrtb2.BidRes
 		}
 	}
 
-	m.appendLine("activity", line)
+	data := m.appendLine("activity", line)
+	if data != nil && line.U != nil && m.ship != nil {
+		m.ship.enqueue(data, m.ivt.get(time.Now()))
+	}
 }
 
 type debugLine struct {
@@ -384,18 +392,23 @@ func (m Module) writeDebugLine(stashed stashedActivity, _ *openrtb2.BidResponse)
 // negligible, and it avoids managing file-handle lifetime/day-rollover
 // across concurrent requests. O_APPEND writes of this size are atomic on
 // POSIX, so concurrent auctions writing to the same file is safe.
-func (m Module) appendLine(prefix string, v interface{}) {
+//
+// Returns the marshalled line (without the newline), or nil if it could not
+// be marshalled. The line is returned even if the file write fails, so the
+// IVT shipper still gets it.
+func (m Module) appendLine(prefix string, v interface{}) []byte {
 	data, err := json.Marshal(v)
 	if err != nil {
-		return
+		return nil
 	}
 	path := filepath.Join(m.cfg.LogDir, fmt.Sprintf("%s.log-%s", prefix, time.Now().UTC().Format("20060102")))
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return
+		return data
 	}
 	defer f.Close()
 	f.Write(append(data, '\n'))
+	return data
 }
 
 // isDebugActive checks the staff-controlled flag file: must exist AND have

@@ -61,8 +61,12 @@ import (
 )
 
 const (
-	entryContextKey   = "activitylog-entry"
-	ivtReloadInterval = 10 * time.Minute
+	entryContextKey = "activitylog-entry"
+	// ivtReloadInterval is how often the directory's mtimes are checked
+	// (one ReadDir + stat, in the background). The small state files the
+	// IVT pipeline refreshes every few minutes (stateFiles) reload on their
+	// own; the multi-MB IP lists are re-parsed only when they change.
+	ivtReloadInterval = 1 * time.Minute
 	maxFieldLen       = 200
 )
 
@@ -281,6 +285,35 @@ type ivtLists struct {
 	breakerLabels  map[string]struct{}
 	confirmed      map[string]struct{}
 	confirmedUA    map[string]map[string]struct{} // "<hk>:<uah>" -> labels (confirmed-ua.json)
+	// ship is the off-host event shipping switch (shipper.go, ship.json).
+	ship shipConfig
+}
+
+// stateFiles are the small files that change often (the IVT pipeline
+// rewrites them every few minutes, the host agent weekly for hashkey).
+// A change to only these reloads them on a copy of the current lists
+// instead of re-parsing every IP list.
+var stateFiles = map[string]bool{
+	"ivt-enforce.json": true, "ivt-breaker.json": true, "confirmed.txt": true,
+	"confirmed-ua.json": true, shipFile: true, "hashkey": true,
+}
+
+// loadState (re)reads the state files into l, replacing whatever l held.
+func loadState(dir string, l *ivtLists) {
+	l.enforceOn, l.enforceLabels, l.enforceExclude = false, nil, nil
+	l.breakerLabels, l.confirmed, l.confirmedUA = nil, nil, nil
+	l.keyID, l.key = "", nil
+	loadEnforcement(dir, l)
+	loadShip(dir, l)
+	// hashkey: one line "<key id> <hex key>" (>= 16 bytes). Missing or short
+	// key: no iph/ifh is written rather than hashing with a weak key.
+	if data, err := os.ReadFile(filepath.Join(dir, ivtFiles.key)); err == nil {
+		if f := strings.Fields(string(data)); len(f) == 2 {
+			if k, err := hex.DecodeString(f[1]); err == nil && len(k) >= 16 {
+				l.keyID, l.key = f[0], k
+			}
+		}
+	}
 }
 
 func loadIVTLists(dir string) *ivtLists {
@@ -293,16 +326,7 @@ func loadIVTLists(dir string) *ivtLists {
 		badUA:   compileBadUA(dir),
 	}
 	l.loaded = len(l.relay)+len(l.allow)+len(l.manual)+len(l.crawler)+len(l.dc) > 0
-	loadEnforcement(dir, l)
-	// hashkey: one line "<key id> <hex key>" (>= 16 bytes). Missing or short
-	// key: no iph/ifh is written rather than hashing with a weak key.
-	if data, err := os.ReadFile(filepath.Join(dir, ivtFiles.key)); err == nil {
-		if f := strings.Fields(string(data)); len(f) == 2 {
-			if k, err := hex.DecodeString(f[1]); err == nil && len(k) >= 16 {
-				l.keyID, l.key = f[0], k
-			}
-		}
-	}
+	loadState(dir, l)
 	return l
 }
 
@@ -341,7 +365,8 @@ type ivtStore struct {
 	cur       atomic.Pointer[ivtLists]
 	mu        sync.Mutex
 	lastCheck time.Time
-	mtimeSig  string
+	listSig   string // mtimes of the IP lists
+	stateSig  string // mtimes of stateFiles
 	loading   atomic.Bool
 }
 
@@ -350,26 +375,32 @@ func newIVTStore(dir string) *ivtStore {
 		return nil
 	}
 	s := &ivtStore{dir: dir}
-	s.mtimeSig = s.signature()
+	s.listSig, s.stateSig = s.signature()
 	s.cur.Store(loadIVTLists(dir))
 	s.lastCheck = time.Now()
 	return s
 }
 
-func (s *ivtStore) signature() string {
-	var b strings.Builder
+// signature returns the mtime/size signatures of the IP lists and of the
+// state files, separately.
+func (s *ivtStore) signature() (lists, state string) {
+	var lb, sb strings.Builder
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	for _, e := range entries {
 		if info, err := e.Info(); err == nil {
+			b := &lb
+			if stateFiles[e.Name()] {
+				b = &sb
+			}
 			b.WriteString(e.Name())
 			b.WriteString(info.ModTime().UTC().Format(time.RFC3339Nano))
 			b.WriteString(strconv.FormatInt(info.Size(), 10))
 		}
 	}
-	return b.String()
+	return lb.String(), sb.String()
 }
 
 func (s *ivtStore) get(now time.Time) *ivtLists {
@@ -385,10 +416,16 @@ func (s *ivtStore) get(now time.Time) *ivtLists {
 	if stale && s.loading.CompareAndSwap(false, true) {
 		go func() {
 			defer s.loading.Store(false)
-			if sig := s.signature(); sig != s.mtimeSig {
+			lists, state := s.signature()
+			switch {
+			case lists != s.listSig:
 				s.cur.Store(loadIVTLists(s.dir))
-				s.mtimeSig = sig
+			case state != s.stateSig:
+				next := *s.cur.Load()
+				loadState(s.dir, &next)
+				s.cur.Store(&next)
 			}
+			s.listSig, s.stateSig = lists, state
 		}()
 	}
 	return s.cur.Load()

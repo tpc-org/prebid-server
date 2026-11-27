@@ -93,6 +93,13 @@ type ExtRequestPrebid struct {
 	Trace string `json:"trace,omitempty"`
 
 	BidderControls map[BidderName]BidderControl `json:"biddercontrols,omitempty"`
+
+	// SecondaryBidders lists bidders the auction does not wait for: once every
+	// other bidder has responded, the auction proceeds, and a secondary bidder
+	// still outstanding is treated as timed out. When present (even empty) it
+	// replaces the account's auction.secondary_bidders.
+	// See https://github.com/prebid/prebid-server/issues/2620.
+	SecondaryBidders []string `json:"secondarybidders,omitempty"`
 }
 
 type AdServerTarget struct {
